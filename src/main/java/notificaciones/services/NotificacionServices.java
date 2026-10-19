@@ -13,7 +13,8 @@ import org.springframework.stereotype.Service;
 
 import jakarta.transaction.Transactional;
 import notificaciones.dto.IntentoEnvioDto;
-import notificaciones.dto.NotificacionDto;
+import notificaciones.dto.CrearNotificacionRequestDto;
+import notificaciones.dto.NotificacionResponseDto;
 import notificaciones.exception.EstadoInvalidoException;
 import notificaciones.exception.RecursoNoEncontradoException;
 import notificaciones.exception.ReglaNegocioException;
@@ -54,7 +55,7 @@ public class NotificacionServices {
     }
 
     // RN-01
-    private NotificacionDto validarNotificacion(NotificacionDto notificacionDto) {
+    private CrearNotificacionRequestDto validarNotificacion(CrearNotificacionRequestDto notificacionDto) {
         validateId(notificacionDto.getDestinatarioId(), "destinatarioId");
         validateId(notificacionDto.getPlantillaId(), "plantillaId");
         validateRequiredText(notificacionDto.getCanal(), "canal");
@@ -85,16 +86,17 @@ public class NotificacionServices {
                         "La notificación con id " + id + " no existe"));
     }
 
-    private NotificacionDto toDto(Notificacion notificacion) {
-        return new NotificacionDto(notificacion.getId(), notificacion.getDestinatarioId(),
-                notificacion.getPlantilla().getId(), notificacion.getCanal().getTipo().name(), null,
+    // Entidad → DTO-02: la entidad no sale del service
+    private NotificacionResponseDto toDto(Notificacion notificacion) {
+        return new NotificacionResponseDto(notificacion.getId(), notificacion.getDestinatarioId(),
+                notificacion.getPlantilla().getId(), notificacion.getCanal().getTipo().name(),
                 notificacion.getEstado().name(), notificacion.getCantidadIntentos(),
                 notificacion.getFechaCreacion(), notificacion.getFechaUltimoIntento());
     }
 
     // SRV-01 (CU-01)
     @Transactional
-    public NotificacionDto crearNotificacion(NotificacionDto notificacionDto) {
+    public NotificacionResponseDto crearNotificacion(CrearNotificacionRequestDto notificacionDto) {
         validarNotificacion(notificacionDto);
 
         Canal canal = obtenerCanalActivo(notificacionDto.getCanal());
@@ -202,13 +204,13 @@ public class NotificacionServices {
 
     // SRV-04 (CU-04)
     @Transactional
-    public NotificacionDto consultarEstado(Long id) {
+    public NotificacionResponseDto consultarEstado(Long id) {
         return toDto(obtenerNotificacion(id));
     }
 
     // SRV-05 (CU-05)
     @Transactional
-    public NotificacionDto reintentarNotificacion(Long id) {
+    public NotificacionResponseDto reintentarNotificacion(Long id) {
         Notificacion notificacion = obtenerNotificacion(id);
 
         // RN-04 y RN-05
