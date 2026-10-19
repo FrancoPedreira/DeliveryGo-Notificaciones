@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import notificaciones.dto.NotificacionDto;
 import notificaciones.services.NotificacionServices;
@@ -25,12 +24,9 @@ public class NotificacionController {
     // API-01
     @PostMapping
     public ResponseEntity<NotificacionDto> crearNotificacion(@RequestBody NotificacionDto notificacionDto) {
-        try {
-            return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(notificacionServices.crearNotificacion(notificacionDto));
-        } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
-        }
+        // Los errores los traduce a DTO-03 el GlobalExceptionHandler
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(notificacionServices.crearNotificacion(notificacionDto));
     }
 
     // API-02

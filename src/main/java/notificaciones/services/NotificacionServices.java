@@ -9,13 +9,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.transaction.Transactional;
 import notificaciones.dto.IntentoEnvioDto;
 import notificaciones.dto.NotificacionDto;
+import notificaciones.exception.EstadoInvalidoException;
+import notificaciones.exception.RecursoNoEncontradoException;
+import notificaciones.exception.ReglaNegocioException;
 import notificaciones.model.Canal;
 import notificaciones.model.EstadoNotificacion;
 import notificaciones.model.Notificacion;
@@ -67,22 +68,21 @@ public class NotificacionServices {
         try {
             tipo = TipoCanal.valueOf(nombreCanal.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT,
-                    "CHANNEL_INACTIVE: el canal " + nombreCanal + " no existe");
+            throw new ReglaNegocioException("CHANNEL_INACTIVE", "El canal " + nombreCanal + " no existe");
         }
 
         Canal canal = canalRepository.findByTipo(tipo);
         if (canal == null || !canal.isActivo()) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT,
-                    "CHANNEL_INACTIVE: el canal " + tipo + " no existe o está inactivo");
+            throw new ReglaNegocioException("CHANNEL_INACTIVE",
+                    "El canal " + tipo + " no existe o está inactivo");
         }
         return canal;
     }
 
     private Notificacion obtenerNotificacion(Long id) {
         return notificacionRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "NOTIFICATION_NOT_FOUND: la notificación con id " + id + " no existe"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("NOTIFICATION_NOT_FOUND",
+                        "La notificación con id " + id + " no existe"));
     }
 
     private NotificacionDto toDto(Notificacion notificacion) {
@@ -120,9 +120,8 @@ public class NotificacionServices {
         Plantilla plantilla = plantillaRepository.findById(plantillaId).orElse(null);
         if (plantilla == null || !plantilla.isActiva()
                 || !plantilla.getCanal().getId().equals(notificacion.getCanal().getId())) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT,
-                    "TEMPLATE_INVALID: la plantilla " + plantillaId
-                            + " no existe, está inactiva o pertenece a otro canal");
+            throw new ReglaNegocioException("TEMPLATE_INVALID", "La plantilla " + plantillaId
+                    + " no existe, está inactiva o pertenece a otro canal");
         }
 
         // RN-08 y RN-06: solo se toman los parámetros que usa la plantilla, el resto se descarta
@@ -140,8 +139,8 @@ public class NotificacionServices {
         matcher.appendTail(mensaje);
 
         if (!faltantes.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT,
-                    "TEMPLATE_PARAMS_MISSING: faltan los parámetros " + String.join(", ", faltantes));
+            throw new ReglaNegocioException("TEMPLATE_PARAMS_MISSING",
+                    "Faltan los parámetros " + String.join(", ", faltantes));
         }
 
         notificacion.setPlantilla(plantilla);
@@ -152,8 +151,8 @@ public class NotificacionServices {
     private void procesarEnvio(Notificacion notificacion) {
         // RN-03
         if (notificacion.getEstado() != EstadoNotificacion.PENDIENTE || notificacion.getMensaje() == null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "NOTIFICATION_NOT_SENDABLE: la notificación no está pendiente o no tiene mensaje generado");
+            throw new EstadoInvalidoException("NOTIFICATION_NOT_SENDABLE",
+                    "La notificación no está pendiente o no tiene mensaje generado");
         }
 
         ResultadoIntento resultado = ResultadoIntento.EXITOSO;
@@ -213,16 +212,13 @@ public class NotificacionServices {
         Notificacion notificacion = obtenerNotificacion(id);
 
         // RN-04 y RN-05
-        if (notificacion.getEstado() == EstadoNotificacion.FALLIDA_DEFINITIVA
-                || notificacion.getCantidadIntentos() >= maxIntentos) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "MAX_RETRIES_EXCEEDED: la notificación " + id
-                            + " alcanzó el máximo de intentos y ya no puede reintentarse");
+        if (notificacion.getEstado() == EstadoNotificacion.FALLIDA_DEFINITIVA) {
+            throw new EstadoInvalidoException("MAX_RETRIES_EXCEEDED", "La notificación " + id
+                    + " alcanzó el máximo de intentos y ya no puede reintentarse");
         }
         if (notificacion.getEstado() != EstadoNotificacion.FALLIDA) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "NOTIFICATION_NOT_RETRYABLE: la notificación " + id + " está en estado "
-                            + notificacion.getEstado() + " y solo puede reintentarse si está FALLIDA");
+            throw new EstadoInvalidoException("NOTIFICATION_NOT_RETRYABLE", "La notificación " + id
+                    + " está en estado " + notificacion.getEstado() + " y solo puede reintentarse si está FALLIDA");
         }
 
         notificacion.setEstado(EstadoNotificacion.PENDIENTE);
