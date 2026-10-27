@@ -8,10 +8,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import jakarta.transaction.Transactional;
+import notificaciones.client.UsuariosClient;
 import notificaciones.dto.CrearNotificacionRequestDto;
 import notificaciones.dto.NotificacionResponseDto;
+import notificaciones.dto.UsuarioContactoResponseDto;
 import notificaciones.exception.EstadoInvalidoException;
 import notificaciones.exception.RecursoNoEncontradoException;
+import notificaciones.exception.ReglaNegocioException;
 import notificaciones.model.Canal;
 import notificaciones.model.EstadoNotificacion;
 import notificaciones.model.Notificacion;
@@ -29,6 +32,7 @@ public class NotificacionServices {
     private final CanalServices canalServices;
     private final PlantillaServices plantillaServices;
     private final IntentoEnvioServices intentoEnvioServices;
+    private final UsuariosClient usuariosClient;
     private final Map<TipoCanal, EmisorNotificacion> emisores = new EnumMap<>(TipoCanal.class);
     private final int maxIntentos;
 
@@ -36,12 +40,14 @@ public class NotificacionServices {
             CanalServices canalServices,
             PlantillaServices plantillaServices,
             IntentoEnvioServices intentoEnvioServices,
+            UsuariosClient usuariosClient,
             List<EmisorNotificacion> emisores,
             @Value("${notificaciones.max-intentos}") int maxIntentos) {
         this.notificacionRepository = notificacionRepository;
         this.canalServices = canalServices;
         this.plantillaServices = plantillaServices;
         this.intentoEnvioServices = intentoEnvioServices;
+        this.usuariosClient = usuariosClient;
         this.maxIntentos = maxIntentos;
         emisores.forEach(emisor -> this.emisores.put(emisor.getTipoCanal(), emisor));
     }
@@ -52,6 +58,25 @@ public class NotificacionServices {
         validateId(notificacionDto.getPlantillaId(), "plantillaId");
         validateRequiredText(notificacionDto.getCanal(), "canal");
         return notificacionDto;
+    }
+
+    // INT-01 y RN-09: el destinatario debe existir, estar activo y tener el dato de contacto que pide el canal
+    private void validarDestinatario(Long destinatarioId, TipoCanal tipoCanal) {
+        UsuarioContactoResponseDto contacto = usuariosClient.obtenerContacto(destinatarioId)
+                .filter(UsuarioContactoResponseDto::isActivo)
+                .orElseThrow(() -> new ReglaNegocioException("RECIPIENT_NOT_FOUND",
+                        "El destinatario " + destinatarioId + " no existe o está inactivo"));
+
+        boolean tieneContacto = switch (tipoCanal) {
+            case EMAIL -> contacto.getEmail() != null && !contacto.getEmail().isBlank();
+            case PUSH -> contacto.getPushToken() != null && !contacto.getPushToken().isBlank();
+            case IN_APP -> true;
+        };
+        if (!tieneContacto) {
+            throw new ReglaNegocioException("RECIPIENT_CONTACT_MISSING",
+                    "El destinatario " + destinatarioId + " no tiene el dato de contacto que requiere el canal "
+                            + tipoCanal);
+        }
     }
 
     private Notificacion obtenerNotificacion(Long id) {
@@ -76,7 +101,7 @@ public class NotificacionServices {
         // RN-07
         Canal canal = canalServices.obtenerCanalActivo(notificacionDto.getCanal());
 
-        // INT-01 pendiente: la validación del destinatario contra Usuarios se agrega al integrar el módulo
+        validarDestinatario(notificacionDto.getDestinatarioId(), canal.getTipo());
 
         Notificacion notificacion = new Notificacion(notificacionDto.getDestinatarioId(), canal);
 

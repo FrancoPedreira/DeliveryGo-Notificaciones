@@ -39,6 +39,13 @@ public class GlobalExceptionHandler {
         return construir(HttpStatus.CONFLICT, e.getCode(), e.getMessage(), request);
     }
 
+    // INT-01: Usuarios no respondió
+    @ExceptionHandler(ServicioNoDisponibleException.class)
+    public ResponseEntity<ErrorResponseDto> handleNoDisponible(ServicioNoDisponibleException e,
+            HttpServletRequest request) {
+        return construir(HttpStatus.SERVICE_UNAVAILABLE, e.getCode(), e.getMessage(), request);
+    }
+
     @ExceptionHandler(RecursoDuplicadoException.class)
     public ResponseEntity<ErrorResponseDto> handleDuplicado(RecursoDuplicadoException e,
             HttpServletRequest request) {
