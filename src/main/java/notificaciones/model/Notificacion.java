@@ -43,11 +43,36 @@ public class Notificacion {
     protected Notificacion() {
     }
 
-    public Notificacion(Long destinatarioId, LocalDateTime fechaCreacion, EstadoNotificacion estado) {
+    // Toda notificación nace PENDIENTE y sin intentos
+    public Notificacion(Long destinatarioId, Canal canal) {
         this.destinatarioId = destinatarioId;
-        this.fechaCreacion = fechaCreacion;
-        this.estado = estado;
+        this.canal = canal;
+        this.estado = EstadoNotificacion.PENDIENTE;
         this.cantidadIntentos = 0;
+        this.fechaCreacion = LocalDateTime.now();
+    }
+
+    // RN-04 y DM-08: único punto que modifica el contador y decide el estado resultante de un intento
+    public void registrarIntento(ResultadoIntento resultado, int maxIntentos) {
+        cantidadIntentos++;
+        fechaUltimoIntento = LocalDateTime.now();
+        if (resultado == ResultadoIntento.EXITOSO) {
+            estado = EstadoNotificacion.ENVIADA;
+        } else if (cantidadIntentos >= maxIntentos) {
+            estado = EstadoNotificacion.FALLIDA_DEFINITIVA;
+        } else {
+            estado = EstadoNotificacion.FALLIDA;
+        }
+    }
+
+    // RN-05
+    public boolean puedeReintentarse() {
+        return estado == EstadoNotificacion.FALLIDA;
+    }
+
+    // CU-05: vuelve a PENDIENTE para reutilizar el envío de CU-03
+    public void volverAPendiente() {
+        estado = EstadoNotificacion.PENDIENTE;
     }
 
     // Getters y Setters
@@ -91,23 +116,7 @@ public class Notificacion {
         this.mensaje = mensaje;
     }
 
-    public void setEstado(EstadoNotificacion estado) {
-        this.estado = estado;
-    }
-
-    public void setCantidadIntentos(int cantidadIntentos) {
-        this.cantidadIntentos = cantidadIntentos;
-    }
-
-    public void setFechaUltimoIntento(LocalDateTime fechaUltimoIntento) {
-        this.fechaUltimoIntento = fechaUltimoIntento;
-    }
-
     public void setPlantilla(Plantilla plantilla) {
         this.plantilla = plantilla;
-    }
-
-    public void setCanal(Canal canal) {
-        this.canal = canal;
     }
 }

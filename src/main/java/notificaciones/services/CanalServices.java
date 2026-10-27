@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import jakarta.transaction.Transactional;
 import notificaciones.dto.CanalDto;
 import notificaciones.exception.RecursoDuplicadoException;
+import notificaciones.exception.ReglaNegocioException;
 import notificaciones.exception.ValidacionException;
 import notificaciones.model.Canal;
 import notificaciones.model.TipoCanal;
@@ -42,5 +43,31 @@ public class CanalServices {
         Canal canal = new Canal(tipo, canalDto.getNombre(), canalDto.isActivo());
         canalRepository.save(canal);
         return canalDto;
+    }
+
+    public Canal obtenerCanalPorTipo(String nombreCanal) {
+        try {
+            return canalRepository.findByTipo(TipoCanal.valueOf(nombreCanal.trim().toUpperCase()))
+                    .orElseThrow(() -> new ValidacionException("El canal " + nombreCanal + " no existe."));
+        } catch (IllegalArgumentException e) {
+            throw new ValidacionException("El canal " + nombreCanal + " no existe.");
+        }
+    }
+
+    // RN-07 (REP-06): el canal solicitado debe existir y estar activo
+    public Canal obtenerCanalActivo(String nombreCanal) {
+        TipoCanal tipo;
+        try {
+            tipo = TipoCanal.valueOf(nombreCanal.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new ReglaNegocioException("CHANNEL_INACTIVE", "El canal " + nombreCanal + " no existe");
+        }
+
+        Canal canal = canalRepository.findByTipo(tipo).orElse(null);
+        if (canal == null || !canal.estaHabilitado()) {
+            throw new ReglaNegocioException("CHANNEL_INACTIVE",
+                    "El canal " + tipo + " no existe o está inactivo");
+        }
+        return canal;
     }
 }

@@ -28,7 +28,16 @@ public class Canal {
         this.activo = activo;
     }
 
-    // Getters y Setters
+    // RN-07
+    public boolean estaHabilitado() {
+        return activo;
+    }
+
+    public void desactivar() {
+        this.activo = false;
+    }
+
+    // Getters
     public Long getId() {
         return id;
     }
@@ -39,13 +48,5 @@ public class Canal {
 
     public String getNombre() {
         return nombre;
-    }
-
-    public boolean isActivo() {
-        return activo;
-    }
-
-    public void setActivo(boolean activo) {
-        this.activo = activo;
     }
 }

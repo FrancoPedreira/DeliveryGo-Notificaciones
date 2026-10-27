@@ -33,14 +33,23 @@ public class IntentoEnvio {
     protected IntentoEnvio() {
     }
 
-    public IntentoEnvio(int numeroIntento, LocalDateTime fecha, ResultadoIntento resultado, String detalleError) {
-        this.numeroIntento = numeroIntento;
-        this.fecha = fecha;
-        this.resultado = resultado;
-        this.detalleError = detalleError;
+    // REL-01: un intento solo se crea a partir de su notificación, con la fecha del último intento registrado
+    public static IntentoEnvio crear(Notificacion notificacion, int numeroIntento, ResultadoIntento resultado,
+            String detalleError) {
+        IntentoEnvio intento = new IntentoEnvio();
+        intento.notificacion = notificacion;
+        intento.numeroIntento = numeroIntento;
+        intento.fecha = notificacion.getFechaUltimoIntento();
+        intento.resultado = resultado;
+        intento.detalleError = detalleError;
+        return intento;
     }
 
-    // Getters y Setters
+    public boolean esExitoso() {
+        return resultado == ResultadoIntento.EXITOSO;
+    }
+
+    // Getters
     public int getNumeroIntento() {
         return numeroIntento;
     }
@@ -57,7 +66,7 @@ public class IntentoEnvio {
         return detalleError;
     }
 
-    public void setNotificacion(Notificacion notificacion) {
-        this.notificacion = notificacion;
+    public Notificacion getNotificacion() {
+        return notificacion;
     }
 }

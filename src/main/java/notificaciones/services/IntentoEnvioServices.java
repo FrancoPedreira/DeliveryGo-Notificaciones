@@ -3,7 +3,6 @@ package notificaciones.services;
 import org.springframework.stereotype.Service;
 
 import jakarta.transaction.Transactional;
-import notificaciones.dto.IntentoEnvioDto;
 import notificaciones.model.IntentoEnvio;
 import notificaciones.model.Notificacion;
 import notificaciones.model.ResultadoIntento;
@@ -17,13 +16,11 @@ public class IntentoEnvioServices {
         this.intentoEnvioRepository = intentoEnvioRepository;
     }
 
+    // REP-05: guarda el intento que la notificación acaba de registrar (DM-08)
     @Transactional
-    public IntentoEnvioDto crearIntentoEnvio(IntentoEnvioDto intentoEnvioDto, Notificacion notificacion) {
-        IntentoEnvio intentoEnvio = new IntentoEnvio(intentoEnvioDto.getNumeroIntento(),
-                intentoEnvioDto.getFecha(), ResultadoIntento.valueOf(intentoEnvioDto.getResultado()),
-                intentoEnvioDto.getDetalleError());
-        intentoEnvio.setNotificacion(notificacion);
-        intentoEnvioRepository.save(intentoEnvio);
-        return intentoEnvioDto;
+    public IntentoEnvio registrarIntento(Notificacion notificacion, ResultadoIntento resultado, String detalleError) {
+        IntentoEnvio intento = IntentoEnvio.crear(notificacion, notificacion.getCantidadIntentos(), resultado,
+                detalleError);
+        return intentoEnvioRepository.save(intento);
     }
 }
