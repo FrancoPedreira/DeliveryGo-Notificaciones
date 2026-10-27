@@ -59,7 +59,6 @@ public class NotificacionServices {
         validateId(notificacionDto.getDestinatarioId(), "destinatarioId");
         validateId(notificacionDto.getPlantillaId(), "plantillaId");
         validateRequiredText(notificacionDto.getCanal(), "canal");
-        validateParametros(notificacionDto.getParametros());
         return notificacionDto;
     }
 
@@ -72,7 +71,7 @@ public class NotificacionServices {
             throw new ReglaNegocioException("CHANNEL_INACTIVE", "El canal " + nombreCanal + " no existe");
         }
 
-        Canal canal = canalRepository.findByTipo(tipo);
+        Canal canal = canalRepository.findByTipo(tipo).orElse(null);
         if (canal == null || !canal.isActivo()) {
             throw new ReglaNegocioException("CHANNEL_INACTIVE",
                     "El canal " + tipo + " no existe o está inactivo");
@@ -108,7 +107,9 @@ public class NotificacionServices {
         notificacion.setCanal(canal);
 
         // Si la plantilla es inválida se lanza la excepción y la transacción se revierte
-        generarMensaje(notificacion, notificacionDto.getPlantillaId(), notificacionDto.getParametros());
+        Map<String, String> parametros = notificacionDto.getParametros() != null ? notificacionDto.getParametros()
+                : Map.of();
+        generarMensaje(notificacion, notificacionDto.getPlantillaId(), parametros);
         notificacionRepository.save(notificacion);
 
         procesarEnvio(notificacion);

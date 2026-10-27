@@ -1,11 +1,9 @@
 package notificaciones.model;
 
-import java.util.List;
-
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "plantillas")
+@Table(name = "plantilla")
 public class Plantilla {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,9 +26,6 @@ public class Plantilla {
     @ManyToOne
     @JoinColumn(name = "canal_id", nullable = false)
     private Canal canal;
-
-    @OneToMany(mappedBy = "plantilla", fetch = FetchType.LAZY)
-    private List<Notificacion> notificaciones;
 
     protected Plantilla() {
     }

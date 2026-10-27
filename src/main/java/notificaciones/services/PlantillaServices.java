@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 
 import jakarta.transaction.Transactional;
 import notificaciones.dto.PlantillaDto;
+import notificaciones.exception.ValidacionException;
 import notificaciones.model.Canal;
 import notificaciones.model.Plantilla;
 import notificaciones.model.TipoCanal;
@@ -26,7 +27,7 @@ public class PlantillaServices {
         validateRequiredText(plantillaDto.getAsunto(), "asunto");
         validateRequiredText(plantillaDto.getCuerpo(), "cuerpo");
         if (plantillaDto.getCanal() == null) {
-            throw new IllegalArgumentException("El canal no puede ser nulo");
+            throw new ValidacionException("El canal no puede ser nulo");
         }
         validateRequiredText(plantillaDto.getCanal().getTipo(), "canal");
         return plantillaDto;
@@ -39,12 +40,13 @@ public class PlantillaServices {
         Canal canal;
         try {
             canal = canalRepository
-                    .findByTipo(TipoCanal.valueOf(plantillaDto.getCanal().getTipo().trim().toUpperCase()));
+                    .findByTipo(TipoCanal.valueOf(plantillaDto.getCanal().getTipo().trim().toUpperCase()))
+                    .orElse(null);
         } catch (IllegalArgumentException e) {
             canal = null;
         }
         if (canal == null) {
-            throw new IllegalArgumentException("El canal " + plantillaDto.getCanal().getTipo() + " no existe.");
+            throw new ValidacionException("El canal " + plantillaDto.getCanal().getTipo() + " no existe.");
         }
 
         Plantilla plantilla = new Plantilla(plantillaDto.getNombre(), plantillaDto.getAsunto(),

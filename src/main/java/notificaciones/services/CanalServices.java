@@ -4,6 +4,8 @@ import org.springframework.stereotype.Service;
 
 import jakarta.transaction.Transactional;
 import notificaciones.dto.CanalDto;
+import notificaciones.exception.RecursoDuplicadoException;
+import notificaciones.exception.ValidacionException;
 import notificaciones.model.Canal;
 import notificaciones.model.TipoCanal;
 import notificaciones.repository.CanalRepository;
@@ -31,10 +33,10 @@ public class CanalServices {
         try {
             tipo = TipoCanal.valueOf(canalDto.getTipo().trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("El tipo de canal " + canalDto.getTipo() + " no existe");
+            throw new ValidacionException("El tipo de canal " + canalDto.getTipo() + " no existe");
         }
-        if (canalRepository.findByTipo(tipo) != null) {
-            throw new IllegalArgumentException("El canal " + tipo + " ya existe");
+        if (canalRepository.findByTipo(tipo).isPresent()) {
+            throw new RecursoDuplicadoException("CHANNEL_DUPLICATED", "El canal " + tipo + " ya existe");
         }
 
         Canal canal = new Canal(tipo, canalDto.getNombre(), canalDto.isActivo());

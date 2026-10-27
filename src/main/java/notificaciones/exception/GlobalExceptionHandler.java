@@ -39,11 +39,17 @@ public class GlobalExceptionHandler {
         return construir(HttpStatus.CONFLICT, e.getCode(), e.getMessage(), request);
     }
 
-    // RN-01: datos obligatorios faltantes o inválidos (los lanza Validaciones)
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponseDto> handleValidacion(IllegalArgumentException e,
+    @ExceptionHandler(RecursoDuplicadoException.class)
+    public ResponseEntity<ErrorResponseDto> handleDuplicado(RecursoDuplicadoException e,
             HttpServletRequest request) {
-        return construir(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", e.getMessage(), request);
+        return construir(HttpStatus.CONFLICT, e.getCode(), e.getMessage(), request);
+    }
+
+    // RN-01: datos obligatorios faltantes o inválidos (los lanza Validaciones)
+    @ExceptionHandler(ValidacionException.class)
+    public ResponseEntity<ErrorResponseDto> handleValidacion(ValidacionException e,
+            HttpServletRequest request) {
+        return construir(HttpStatus.BAD_REQUEST, e.getCode(), e.getMessage(), request);
     }
 
     // Body con JSON mal formado o id no numérico en la URL
