@@ -10,6 +10,8 @@ import notificaciones.dto.UsuarioContactoResponseDto;
 import notificaciones.exception.ServicioNoDisponibleException;
 
 // DM-10: reemplaza a Usuarios hasta integrar el módulo real; se cambia por un cliente HTTP sin tocar los services
+// MOMENTÁNEO: implementación simulada mientras esperamos que el equipo de Usuarios publique su API.
+// Cuando esté disponible se modificará: se crea el cliente real y esta clase se elimina o queda solo para tests.
 @Component
 public class UsuariosClientSimulado implements UsuariosClient {
     private static final Map<Long, UsuarioContactoResponseDto> USUARIOS = Map.of(

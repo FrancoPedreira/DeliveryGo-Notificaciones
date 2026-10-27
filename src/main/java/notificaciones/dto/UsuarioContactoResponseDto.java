@@ -1,6 +1,7 @@
 package notificaciones.dto;
 
 // DTO-04: respuesta de Usuarios en INT-01. Solo los datos mínimos de contacto (RN-06)
+// MOMENTÁNEO: campos propuestos por nosotros; se ajustarán cuando el equipo de Usuarios publique su API.
 public class UsuarioContactoResponseDto {
     private Long id;
     private String nombre;
