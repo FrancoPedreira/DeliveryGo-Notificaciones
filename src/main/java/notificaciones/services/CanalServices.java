@@ -1,8 +1,8 @@
 package notificaciones.services;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.transaction.Transactional;
 import notificaciones.dto.CanalDto;
 import notificaciones.exception.RecursoDuplicadoException;
 import notificaciones.exception.ReglaNegocioException;
@@ -55,6 +55,7 @@ public class CanalServices {
     }
 
     // RN-07 (REP-06): el canal solicitado debe existir y estar activo
+    @Transactional(readOnly = true)
     public Canal obtenerCanalActivo(String nombreCanal) {
         TipoCanal tipo;
         try {

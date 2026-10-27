@@ -5,7 +5,9 @@ import java.time.LocalDateTime;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "intento_envio")
+// DM-09: respaldo en la base para que un número de intento no se repita en la misma notificación
+@Table(name = "intento_envio", uniqueConstraints = @UniqueConstraint(columnNames = { "notificacion_id",
+        "numero_intento" }))
 public class IntentoEnvio {
 
     @Id

@@ -3,8 +3,9 @@ package notificaciones.services;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.transaction.Transactional;
 import notificaciones.dto.PlantillaDto;
 import notificaciones.exception.ReglaNegocioException;
 import notificaciones.exception.ValidacionException;
@@ -47,7 +48,8 @@ public class PlantillaServices {
         return plantillaDto;
     }
 
-    // SRV-02 (CU-02)
+    // SRV-02 (CU-02). DM-09: participa de la transacción de SRV-01, nunca abre una propia
+    @Transactional(propagation = Propagation.MANDATORY)
     public void generarMensaje(Notificacion notificacion, Long plantillaId, Map<String, String> parametros) {
         // RN-02 (REP-02)
         Plantilla plantilla = plantillaRepository.findById(plantillaId).orElse(null);

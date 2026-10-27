@@ -6,8 +6,9 @@ import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
-import jakarta.transaction.Transactional;
 import notificaciones.client.UsuariosClient;
 import notificaciones.dto.CrearNotificacionRequestDto;
 import notificaciones.dto.NotificacionResponseDto;
@@ -33,6 +34,7 @@ public class NotificacionServices {
     private final PlantillaServices plantillaServices;
     private final IntentoEnvioServices intentoEnvioServices;
     private final UsuariosClient usuariosClient;
+    private final TransactionTemplate transactionTemplate;
     private final Map<TipoCanal, EmisorNotificacion> emisores = new EnumMap<>(TipoCanal.class);
     private final int maxIntentos;
 
@@ -41,6 +43,7 @@ public class NotificacionServices {
             PlantillaServices plantillaServices,
             IntentoEnvioServices intentoEnvioServices,
             UsuariosClient usuariosClient,
+            TransactionTemplate transactionTemplate,
             List<EmisorNotificacion> emisores,
             @Value("${notificaciones.max-intentos}") int maxIntentos) {
         this.notificacionRepository = notificacionRepository;
@@ -48,6 +51,7 @@ public class NotificacionServices {
         this.plantillaServices = plantillaServices;
         this.intentoEnvioServices = intentoEnvioServices;
         this.usuariosClient = usuariosClient;
+        this.transactionTemplate = transactionTemplate;
         this.maxIntentos = maxIntentos;
         emisores.forEach(emisor -> this.emisores.put(emisor.getTipoCanal(), emisor));
     }
@@ -94,26 +98,34 @@ public class NotificacionServices {
     }
 
     // SRV-01 (CU-01)
-    @Transactional
     public NotificacionResponseDto crearNotificacion(CrearNotificacionRequestDto notificacionDto) {
         validarNotificacion(notificacionDto);
 
         // RN-07
         Canal canal = canalServices.obtenerCanalActivo(notificacionDto.getCanal());
 
+        // DM-10: INT-01 se consulta antes de abrir la transacción, para no tener una conexión
+        // a la base tomada mientras se espera a Usuarios
         validarDestinatario(notificacionDto.getDestinatarioId(), canal.getTipo());
 
-        Notificacion notificacion = new Notificacion(notificacionDto.getDestinatarioId(), canal);
-
-        // SRV-02: si la plantilla es inválida se lanza la excepción y la transacción se revierte
         Map<String, String> parametros = notificacionDto.getParametros() != null ? notificacionDto.getParametros()
                 : Map.of();
-        plantillaServices.generarMensaje(notificacion, notificacionDto.getPlantillaId(), parametros);
-        notificacionRepository.save(notificacion);
 
-        procesarEnvio(notificacion);
+        // DM-09: alta, mensaje, primer intento, contador y estado se confirman juntos.
+        // Se usa TransactionTemplate porque un @Transactional en un método de esta misma clase
+        // no pasaría por el proxy de Spring y no abriría la transacción.
+        return transactionTemplate.execute(status -> {
+            Notificacion notificacion = new Notificacion(notificacionDto.getDestinatarioId(), canal);
 
-        return toDto(notificacion);
+            // SRV-02: si la plantilla es inválida se lanza la excepción y la transacción se revierte
+            plantillaServices.generarMensaje(notificacion, notificacionDto.getPlantillaId(), parametros);
+            notificacionRepository.save(notificacion);
+
+            // Un fallo de envío no lanza excepción: se confirma como FALLIDA con su intento
+            procesarEnvio(notificacion);
+
+            return toDto(notificacion);
+        });
     }
 
     // SRV-03 (CU-03)
@@ -147,15 +159,18 @@ public class NotificacionServices {
     }
 
     // SRV-04 (CU-04)
-    @Transactional
+    @Transactional(readOnly = true)
     public NotificacionResponseDto consultarEstado(Long id) {
         return toDto(obtenerNotificacion(id));
     }
 
-    // SRV-05 (CU-05)
+    // SRV-05 (CU-05). DM-09: una sola transacción con la notificación bloqueada hasta el commit
     @Transactional
     public NotificacionResponseDto reintentarNotificacion(Long id) {
-        Notificacion notificacion = obtenerNotificacion(id);
+        // REP-07: un segundo reintento simultáneo espera acá y después ve el estado que dejó el primero
+        Notificacion notificacion = notificacionRepository.findByIdParaActualizar(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("NOTIFICATION_NOT_FOUND",
+                        "La notificación con id " + id + " no existe"));
 
         // RN-04 y RN-05
         if (notificacion.getEstado() == EstadoNotificacion.FALLIDA_DEFINITIVA) {
