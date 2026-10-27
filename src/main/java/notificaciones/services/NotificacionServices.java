@@ -1,7 +1,8 @@
 package notificaciones.services;
 
+import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,8 @@ import notificaciones.model.Notificacion;
 import notificaciones.model.ResultadoIntento;
 import notificaciones.model.TipoCanal;
 import notificaciones.repository.NotificacionRepository;
+import notificaciones.sender.EmisorNotificacion;
+import notificaciones.sender.ResultadoEnvio;
 import static notificaciones.utils.Validaciones.*;
 
 // Orquesta los casos de uso CORE; delega en el service de cada entidad
@@ -26,21 +29,21 @@ public class NotificacionServices {
     private final CanalServices canalServices;
     private final PlantillaServices plantillaServices;
     private final IntentoEnvioServices intentoEnvioServices;
+    private final Map<TipoCanal, EmisorNotificacion> emisores = new EnumMap<>(TipoCanal.class);
     private final int maxIntentos;
-    private final double tasaFallo;
 
     public NotificacionServices(NotificacionRepository notificacionRepository,
             CanalServices canalServices,
             PlantillaServices plantillaServices,
             IntentoEnvioServices intentoEnvioServices,
-            @Value("${notificaciones.max-intentos}") int maxIntentos,
-            @Value("${notificaciones.emisor.tasa-fallo}") double tasaFallo) {
+            List<EmisorNotificacion> emisores,
+            @Value("${notificaciones.max-intentos}") int maxIntentos) {
         this.notificacionRepository = notificacionRepository;
         this.canalServices = canalServices;
         this.plantillaServices = plantillaServices;
         this.intentoEnvioServices = intentoEnvioServices;
         this.maxIntentos = maxIntentos;
-        this.tasaFallo = tasaFallo;
+        emisores.forEach(emisor -> this.emisores.put(emisor.getTipoCanal(), emisor));
     }
 
     // RN-01
@@ -104,9 +107,11 @@ public class NotificacionServices {
             resultado = ResultadoIntento.FALLIDO;
             detalleError = "El canal " + notificacion.getCanal().getTipo() + " está inactivo";
         } else {
-            detalleError = enviarSimulado(notificacion.getCanal().getTipo());
-            if (detalleError != null) {
+            // DM-07: envía el emisor del canal (EMAIL/PUSH simulados, IN_APP bandeja interna)
+            ResultadoEnvio envio = emisores.get(notificacion.getCanal().getTipo()).enviar(notificacion);
+            if (!envio.exitoso()) {
                 resultado = ResultadoIntento.FALLIDO;
+                detalleError = envio.detalleError();
             }
         }
 
@@ -114,14 +119,6 @@ public class NotificacionServices {
         notificacion.registrarIntento(resultado, maxIntentos);
         intentoEnvioServices.registrarIntento(notificacion, resultado, detalleError);
         notificacionRepository.save(notificacion);
-    }
-
-    // DM-07: EMAIL y PUSH se simulan con una tasa de fallo; IN_APP queda entregada al persistirse
-    private String enviarSimulado(TipoCanal tipo) {
-        if (tipo != TipoCanal.IN_APP && ThreadLocalRandom.current().nextDouble() < tasaFallo) {
-            return "Fallo simulado del proveedor " + tipo;
-        }
-        return null;
     }
 
     // SRV-04 (CU-04)
