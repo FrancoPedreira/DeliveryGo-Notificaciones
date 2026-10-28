@@ -1,12 +1,19 @@
 package notificaciones.model;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import jakarta.persistence.*;
+import notificaciones.exception.ReglaNegocioException;
 
 @Entity
-@Table(name = "plantillas")
+@Table(name = "plantilla")
 public class Plantilla {
+    private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\{(\\w+)\\}");
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -29,9 +36,6 @@ public class Plantilla {
     @JoinColumn(name = "canal_id", nullable = false)
     private Canal canal;
 
-    @OneToMany(mappedBy = "plantilla", fetch = FetchType.LAZY)
-    private List<Notificacion> notificaciones;
-
     protected Plantilla() {
     }
 
@@ -41,6 +45,33 @@ public class Plantilla {
         this.cuerpo = cuerpo;
         this.activa = activa;
         this.canal = canal;
+    }
+
+    // RN-08 y RN-06: solo se toman los parámetros que usa la plantilla, el resto se descarta
+    public String renderizar(Map<String, String> parametros) {
+        List<String> faltantes = new ArrayList<>();
+        StringBuilder mensaje = new StringBuilder();
+        Matcher matcher = VARIABLE_PATTERN.matcher(cuerpo);
+        while (matcher.find()) {
+            String valor = parametros.get(matcher.group(1));
+            if (valor == null || valor.isBlank()) {
+                faltantes.add(matcher.group(1));
+            } else {
+                matcher.appendReplacement(mensaje, Matcher.quoteReplacement(valor));
+            }
+        }
+        matcher.appendTail(mensaje);
+
+        if (!faltantes.isEmpty()) {
+            throw new ReglaNegocioException("TEMPLATE_PARAMS_MISSING",
+                    "Faltan los parámetros " + String.join(", ", faltantes));
+        }
+        return mensaje.toString();
+    }
+
+    // RN-02
+    public boolean admiteCanal(Canal canal) {
+        return this.canal.getId().equals(canal.getId());
     }
 
     // Getters y Setters

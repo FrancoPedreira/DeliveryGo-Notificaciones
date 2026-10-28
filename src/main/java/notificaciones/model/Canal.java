@@ -1,11 +1,9 @@
 package notificaciones.model;
 
-import java.util.List;
-
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "canales")
+@Table(name = "canal")
 public class Canal {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -21,13 +19,6 @@ public class Canal {
     @Column(nullable = false)
     private boolean activo;
 
-    // Relaciones
-    @OneToMany(mappedBy = "canal", fetch = FetchType.LAZY)
-    private List<Plantilla> plantillas;
-
-    @OneToMany(mappedBy = "canal", fetch = FetchType.LAZY)
-    private List<Notificacion> notificaciones;
-
     protected Canal() {
     }
 
@@ -37,7 +28,16 @@ public class Canal {
         this.activo = activo;
     }
 
-    // Getters y Setters
+    // RN-07
+    public boolean estaHabilitado() {
+        return activo;
+    }
+
+    public void desactivar() {
+        this.activo = false;
+    }
+
+    // Getters
     public Long getId() {
         return id;
     }
@@ -48,13 +48,5 @@ public class Canal {
 
     public String getNombre() {
         return nombre;
-    }
-
-    public boolean isActivo() {
-        return activo;
-    }
-
-    public void setActivo(boolean activo) {
-        this.activo = activo;
     }
 }

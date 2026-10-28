@@ -1,9 +1,9 @@
 package notificaciones.services;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.transaction.Transactional;
-import notificaciones.dto.IntentoEnvioDto;
 import notificaciones.model.IntentoEnvio;
 import notificaciones.model.Notificacion;
 import notificaciones.model.ResultadoIntento;
@@ -17,13 +17,12 @@ public class IntentoEnvioServices {
         this.intentoEnvioRepository = intentoEnvioRepository;
     }
 
-    @Transactional
-    public IntentoEnvioDto crearIntentoEnvio(IntentoEnvioDto intentoEnvioDto, Notificacion notificacion) {
-        IntentoEnvio intentoEnvio = new IntentoEnvio(intentoEnvioDto.getNumeroIntento(),
-                intentoEnvioDto.getFecha(), ResultadoIntento.valueOf(intentoEnvioDto.getResultado()),
-                intentoEnvioDto.getDetalleError());
-        intentoEnvio.setNotificacion(notificacion);
-        intentoEnvioRepository.save(intentoEnvio);
-        return intentoEnvioDto;
+    // REP-05: guarda el intento que la notificación acaba de registrar (DM-08).
+    // DM-09: debe ejecutarse en la misma transacción que actualiza el contador y el estado
+    @Transactional(propagation = Propagation.MANDATORY)
+    public IntentoEnvio registrarIntento(Notificacion notificacion, ResultadoIntento resultado, String detalleError) {
+        IntentoEnvio intento = IntentoEnvio.crear(notificacion, notificacion.getCantidadIntentos(), resultado,
+                detalleError);
+        return intentoEnvioRepository.save(intento);
     }
 }
