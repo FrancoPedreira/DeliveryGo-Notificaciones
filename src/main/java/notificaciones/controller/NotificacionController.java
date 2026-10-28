@@ -1,6 +1,7 @@
 package notificaciones.controller;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,8 +15,8 @@ import notificaciones.dto.NotificacionResponseDto;
 import notificaciones.services.NotificacionServices;
 
 @RestController
-@RequestMapping("/api/v1/notifications")
-public class NotificacionController {
+@RequestMapping(value = "/api/v1/notifications", produces = MediaType.APPLICATION_JSON_VALUE)
+public class NotificacionController implements INotificacionController {
     private final NotificacionServices notificacionServices;
 
     public NotificacionController(NotificacionServices notificacionServices) {
@@ -23,6 +24,7 @@ public class NotificacionController {
     }
 
     // API-01
+    @Override
     @PostMapping
     public ResponseEntity<NotificacionResponseDto> crearNotificacion(
             @RequestBody CrearNotificacionRequestDto notificacionDto) {
@@ -32,12 +34,14 @@ public class NotificacionController {
     }
 
     // API-02
+    @Override
     @GetMapping("/{id}")
     public ResponseEntity<NotificacionResponseDto> consultarEstado(@PathVariable Long id) {
         return ResponseEntity.ok(notificacionServices.consultarEstado(id));
     }
 
     // API-03
+    @Override
     @PostMapping("/{id}/retry")
     public ResponseEntity<NotificacionResponseDto> reintentarNotificacion(@PathVariable Long id) {
         return ResponseEntity.ok(notificacionServices.reintentarNotificacion(id));
