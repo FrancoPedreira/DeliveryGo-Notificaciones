@@ -57,7 +57,7 @@ class NotificacionControllerTest {
     @Test
     void api01Devuelve400ConElFormatoDeErrorYElCorrelationIdDelLlamador() throws Exception {
         mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).header("X-Correlation-Id", "pedido-123")
-                .content("{\"destinatarioId\":10,\"plantillaId\":1}"))
+                .content("{\"destinatarioId\":10,\"canal\":\"EMAIL\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(header().string("X-Correlation-Id", "pedido-123"))
                 .andExpect(jsonPath("$.status").value(400))

@@ -23,6 +23,13 @@ public final class Validaciones {
         return input;
     }
 
+    public static String validateMaxLength(String input, String campo, int maximo) {
+        if (input != null && input.length() > maximo) {
+            throw new ValidacionException("El campo " + campo + " no puede superar los " + maximo + " caracteres");
+        }
+        return input;
+    }
+
     public static String validateValidCharacters(String input, String campo) {
         validateRequiredText(input, campo);
         if (!input.matches("^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ_\s]+$")) {

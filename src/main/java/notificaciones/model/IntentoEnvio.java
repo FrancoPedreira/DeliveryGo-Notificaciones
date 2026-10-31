@@ -52,6 +52,10 @@ public class IntentoEnvio {
     }
 
     // Getters
+    public Long getId() {
+        return id;
+    }
+
     public int getNumeroIntento() {
         return numeroIntento;
     }

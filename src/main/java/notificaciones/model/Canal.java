@@ -37,6 +37,15 @@ public class Canal {
         this.activo = false;
     }
 
+    // CU-08: un canal puede volver a habilitarse sin tocar código
+    public void activar() {
+        this.activo = true;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
     // Getters
     public Long getId() {
         return id;

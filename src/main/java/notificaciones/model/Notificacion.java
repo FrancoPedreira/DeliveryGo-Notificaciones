@@ -1,6 +1,7 @@
 package notificaciones.model;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
 import jakarta.persistence.*;
 
@@ -30,6 +31,9 @@ public class Notificacion {
     private LocalDateTime fechaCreacion;
 
     private LocalDateTime fechaUltimoIntento;
+
+    // CU-10: solo se completa en las notificaciones IN_APP que el destinatario ya leyó
+    private LocalDateTime fechaLectura;
 
     // Relaciones
     @ManyToOne
@@ -75,6 +79,23 @@ public class Notificacion {
         estado = EstadoNotificacion.PENDIENTE;
     }
 
+    // RN-12 (CU-10): solo una notificación IN_APP ya entregada puede marcarse como leída
+    public boolean puedeMarcarseComoLeida() {
+        return canal.getTipo() == TipoCanal.IN_APP && estado == EstadoNotificacion.ENVIADA;
+    }
+
+    // RN-12: marcar es idempotente, conserva la fecha de la primera lectura
+    public void marcarComoLeida() {
+        if (fechaLectura == null) {
+            // Milisegundos: la base no guarda los nanosegundos y la respuesta debe coincidir con lo persistido
+            fechaLectura = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
+        }
+    }
+
+    public boolean estaLeida() {
+        return fechaLectura != null;
+    }
+
     // Getters y Setters
     public Long getId() {
         return id;
@@ -102,6 +123,10 @@ public class Notificacion {
 
     public LocalDateTime getFechaUltimoIntento() {
         return fechaUltimoIntento;
+    }
+
+    public LocalDateTime getFechaLectura() {
+        return fechaLectura;
     }
 
     public Plantilla getPlantilla() {

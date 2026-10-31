@@ -64,14 +64,20 @@ class NotificacionServicesTest {
 
     @Test
     void cu01ParametrosEsOpcionalSiLaPlantillaNoLosNecesita() {
-        // RN-01 solo exige destinatario, plantilla y canal; la plantilla 3 pide {codigo}, así que falla por RN-08
+        // RN-01 solo exige destinatario y plantilla; la plantilla 3 pide {codigo}, así que falla por RN-08
         assertCodigo(() -> notificacionServices.crearNotificacion(solicitud(10L, 3L, "IN_APP", null)),
                 ReglaNegocioException.class, "TEMPLATE_PARAMS_MISSING");
     }
 
     @Test
-    void rn01RechazaSolicitudSinCanal() {
-        assertThatThrownBy(() -> notificacionServices.crearNotificacion(solicitud(10L, 1L, null, Map.of())))
+    void rn01RechazaSolicitudSinPlantilla() {
+        assertThatThrownBy(() -> notificacionServices.crearNotificacion(solicitud(10L, null, "EMAIL", Map.of())))
+                .isInstanceOf(ValidacionException.class);
+    }
+
+    @Test
+    void rn01RechazaSolicitudSinDestinatario() {
+        assertThatThrownBy(() -> notificacionServices.crearNotificacion(solicitud(null, 1L, "EMAIL", Map.of())))
                 .isInstanceOf(ValidacionException.class);
     }
 
