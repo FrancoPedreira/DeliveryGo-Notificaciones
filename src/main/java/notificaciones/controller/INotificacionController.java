@@ -10,17 +10,20 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
+
 import notificaciones.dto.CrearNotificacionRequestDto;
 import notificaciones.dto.ErrorResponseDto;
+import notificaciones.dto.IntentoEnvioResponseDto;
 import notificaciones.dto.NotificacionResponseDto;
 
-// Documentación Swagger de API-01 a API-03; la implementación queda limpia en NotificacionController
-@Tag(name = "Notificaciones", description = "Contrato común de notificaciones del ecosistema (CU-01, CU-04, CU-05)")
+// Documentación Swagger de API-01 a API-03, API-11 y API-12; la implementación queda limpia en NotificacionController
+@Tag(name = "Notificaciones", description = "Contrato común de notificaciones del ecosistema (CU-01, CU-04, CU-05, CU-09, CU-10)")
 public interface INotificacionController {
 
     String ERROR_400 = """
             {"timestamp":"2026-10-27T19:19:11","status":400,"code":"VALIDATION_ERROR",\
-            "message":"El campo canal no puede ser nulo o vacío","path":"/api/v1/notifications",\
+            "message":"El campo plantillaId no puede ser nulo","path":"/api/v1/notifications",\
             "correlationId":"f42e7e74-c72a-4423-b931-0a2828508aee"}""";
     String ERROR_404 = """
             {"timestamp":"2026-10-27T19:19:11","status":404,"code":"NOTIFICATION_NOT_FOUND",\
@@ -29,7 +32,10 @@ public interface INotificacionController {
 
     @Operation(summary = "Crear una notificación (CU-01)", description = """
             Registra la solicitud, genera el mensaje a partir de la plantilla y los parámetros (CU-02) y lo envía \
-            por el canal indicado (CU-03), todo en una sola operación.
+            por el canal (CU-03), todo en una sola operación.
+
+            El canal es opcional (CU-08): si se omite se usa el de la plantilla; si se indica, debe coincidir con el \
+            de la plantilla.
 
             Responde 201 tanto si el envío salió bien (ENVIADA) como si falló (FALLIDA): un envío fallido queda \
             registrado y puede reintentarse con POST /api/v1/notifications/{id}/retry.
@@ -37,7 +43,7 @@ public interface INotificacionController {
             Si la solicitud no pasa las validaciones (400, 422) o Usuarios no responde (503), no se registra nada.""")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Notificación creada, con estado ENVIADA o FALLIDA"),
-            @ApiResponse(responseCode = "400", description = "Falta destinatarioId, plantillaId o canal (RN-01), "
+            @ApiResponse(responseCode = "400", description = "Falta destinatarioId o plantillaId (RN-01), "
                     + "o el JSON está mal formado", content = @Content(schema = @Schema(implementation = ErrorResponseDto.class),
                             examples = @ExampleObject(name = "VALIDATION_ERROR", value = ERROR_400))),
             @ApiResponse(responseCode = "422", description = "La solicitud viola una regla de negocio", content = @Content(
@@ -85,5 +91,33 @@ public interface INotificacionController {
                             @ExampleObject(name = "MAX_RETRIES_EXCEEDED", summary = "Ya alcanzó el máximo de intentos (RN-04)",
                                     value = "{\"status\":409,\"code\":\"MAX_RETRIES_EXCEEDED\",\"message\":\"La notificación 1 alcanzó el máximo de intentos y ya no puede reintentarse\"}") })) })
     ResponseEntity<NotificacionResponseDto> reintentarNotificacion(
+            @Parameter(description = "Id de la notificación", example = "1") Long id);
+
+    @Operation(summary = "Consultar los intentos de envío de una notificación (CU-09)", description = """
+            Devuelve cada intento de envío en el orden en que ocurrió, con su resultado y, si falló, el motivo. \
+            No incluye el mensaje (RN-06).""")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Intentos de la notificación, del primero al último"),
+            @ApiResponse(responseCode = "404", description = "No existe una notificación con ese id", content = @Content(
+                    schema = @Schema(implementation = ErrorResponseDto.class), examples = @ExampleObject(
+                            name = "NOTIFICATION_NOT_FOUND", value = ERROR_404))) })
+    ResponseEntity<List<IntentoEnvioResponseDto>> consultarIntentos(
+            @Parameter(description = "Id de la notificación", example = "1") Long id);
+
+    @Operation(summary = "Marcar una notificación interna como leída (CU-10)", description = """
+            Solo las notificaciones del canal IN_APP ya ENVIADAS pueden marcarse como leídas. La operación es \
+            idempotente: si ya estaba leída devuelve 200 con la fecha de la primera lectura.""")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Notificación leída; fechaLectura indica cuándo"),
+            @ApiResponse(responseCode = "404", description = "No existe una notificación con ese id", content = @Content(
+                    schema = @Schema(implementation = ErrorResponseDto.class), examples = @ExampleObject(
+                            name = "NOTIFICATION_NOT_FOUND", value = ERROR_404))),
+            @ApiResponse(responseCode = "409", description = "La notificación todavía no fue entregada (RN-12)",
+                    content = @Content(schema = @Schema(implementation = ErrorResponseDto.class), examples = @ExampleObject(
+                            name = "NOTIFICATION_NOT_DELIVERED", value = "{\"status\":409,\"code\":\"NOTIFICATION_NOT_DELIVERED\",\"message\":\"La notificación 1 está en estado FALLIDA y solo puede leerse una vez ENVIADA\"}"))),
+            @ApiResponse(responseCode = "422", description = "La notificación no es del canal IN_APP (RN-12)", content = @Content(
+                    schema = @Schema(implementation = ErrorResponseDto.class), examples = @ExampleObject(
+                            name = "NOTIFICATION_NOT_IN_APP", value = "{\"status\":422,\"code\":\"NOTIFICATION_NOT_IN_APP\",\"message\":\"La notificación 1 es del canal EMAIL y solo las IN_APP pueden marcarse como leídas\"}"))) })
+    ResponseEntity<NotificacionResponseDto> marcarComoLeida(
             @Parameter(description = "Id de la notificación", example = "1") Long id);
 }

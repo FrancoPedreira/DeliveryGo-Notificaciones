@@ -4,8 +4,9 @@ import java.time.LocalDateTime;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-// DTO-02: salida de API-01 a API-03. No incluye mensaje ni parámetros para no exponer datos sensibles (RN-06)
-@Schema(description = "DTO-02: estado de una notificación. No incluye el mensaje para no exponer datos sensibles")
+// DTO-02: salida de API-01 a API-03 y API-12, y elemento del historial de API-04. Nunca incluye los parámetros (RN-06);
+// el mensaje solo viaja en el historial del propio destinatario (CU-06)
+@Schema(description = "DTO-02: estado de una notificación. Solo el historial (CU-06) incluye el mensaje")
 public class NotificacionResponseDto {
     @Schema(example = "1")
     private Long id;
@@ -22,9 +23,14 @@ public class NotificacionResponseDto {
     private LocalDateTime fechaCreacion;
     @Schema(description = "Ausente si todavía no hubo intentos")
     private LocalDateTime fechaUltimoIntento;
+    @Schema(description = "Solo en notificaciones IN_APP leídas (CU-10)")
+    private LocalDateTime fechaLectura;
+    @Schema(description = "Mensaje generado; solo se informa en el historial del destinatario (CU-06)")
+    private String mensaje;
 
     public NotificacionResponseDto(Long id, Long destinatarioId, Long plantillaId, String canal, String estado,
-            int cantidadIntentos, LocalDateTime fechaCreacion, LocalDateTime fechaUltimoIntento) {
+            int cantidadIntentos, LocalDateTime fechaCreacion, LocalDateTime fechaUltimoIntento,
+            LocalDateTime fechaLectura, String mensaje) {
         this.id = id;
         this.destinatarioId = destinatarioId;
         this.plantillaId = plantillaId;
@@ -33,6 +39,8 @@ public class NotificacionResponseDto {
         this.cantidadIntentos = cantidadIntentos;
         this.fechaCreacion = fechaCreacion;
         this.fechaUltimoIntento = fechaUltimoIntento;
+        this.fechaLectura = fechaLectura;
+        this.mensaje = mensaje;
     }
 
     // Getters: solo lectura, Jackson los usa para armar el JSON de respuesta
@@ -66,5 +74,13 @@ public class NotificacionResponseDto {
 
     public LocalDateTime getFechaUltimoIntento() {
         return fechaUltimoIntento;
+    }
+
+    public LocalDateTime getFechaLectura() {
+        return fechaLectura;
+    }
+
+    public String getMensaje() {
+        return mensaje;
     }
 }

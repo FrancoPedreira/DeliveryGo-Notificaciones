@@ -18,10 +18,14 @@ public class OpenApiConfig {
                         .version("1.0")
                         .description("""
                                 Contrato común para que cualquier módulo del ecosistema (Usuarios, Pedidos, Pagos, \
-                                Logística) solicite una notificación indicando destinatario, plantilla, canal y \
+                                Logística) solicite una notificación indicando destinatario, plantilla, canal (opcional) y \
                                 parámetros, sin lógica particular por tipo de evento.
 
-                                **Datos de prueba cargados al iniciar**
+                                Además del contrato común expone el historial por usuario, la administración de \
+                                plantillas y canales, la consulta de intentos y la bandeja interna (marcar como leída).
+
+                                **Datos de prueba cargados al iniciar** (las plantillas se pueden listar con \
+                                GET /api/v1/templates)
 
                                 | plantillaId | Canal | Parámetros que requiere |
                                 |---|---|---|

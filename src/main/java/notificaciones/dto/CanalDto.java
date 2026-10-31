@@ -1,5 +1,9 @@
 package notificaciones.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
+// DTO-07: salida de API-09 y API-10 (CU-08)
+@Schema(description = "DTO-07: canal de envío y si está habilitado")
 public class CanalDto {
     private String tipo;
     private String nombre;

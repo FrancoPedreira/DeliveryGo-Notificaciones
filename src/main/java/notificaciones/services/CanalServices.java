@@ -3,8 +3,11 @@ package notificaciones.services;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 import notificaciones.dto.CanalDto;
 import notificaciones.exception.RecursoDuplicadoException;
+import notificaciones.exception.RecursoNoEncontradoException;
 import notificaciones.exception.ReglaNegocioException;
 import notificaciones.exception.ValidacionException;
 import notificaciones.model.Canal;
@@ -43,6 +46,42 @@ public class CanalServices {
         Canal canal = new Canal(tipo, canalDto.getNombre(), canalDto.isActivo());
         canalRepository.save(canal);
         return canalDto;
+    }
+
+    private CanalDto toDto(Canal canal) {
+        return new CanalDto(canal.getTipo().name(), canal.getNombre(), canal.isActivo());
+    }
+
+    // SRV-08 (CU-08, REP-11): canales disponibles y si están habilitados
+    @Transactional(readOnly = true)
+    public List<CanalDto> listarCanales() {
+        return canalRepository.findAll().stream().map(this::toDto).toList();
+    }
+
+    // SRV-08 (CU-08, RN-07): habilitar o deshabilitar un canal sin tocar código. Idempotente.
+    // Las notificaciones ya registradas no cambian: si el canal está inactivo al enviarlas, el intento falla (CU-03 A3)
+    @Transactional
+    public CanalDto cambiarEstadoCanal(String tipoCanal, Boolean activo) {
+        validateRequiredText(tipoCanal, "tipo");
+        if (activo == null) {
+            throw new ValidacionException("El campo activo no puede ser nulo");
+        }
+        Canal canal;
+        try {
+            canal = canalRepository.findByTipo(TipoCanal.valueOf(tipoCanal.trim().toUpperCase())).orElse(null);
+        } catch (IllegalArgumentException e) {
+            canal = null;
+        }
+        if (canal == null) {
+            throw new RecursoNoEncontradoException("CHANNEL_NOT_FOUND", "El canal " + tipoCanal + " no existe");
+        }
+
+        if (activo) {
+            canal.activar();
+        } else {
+            canal.desactivar();
+        }
+        return toDto(canalRepository.save(canal));
     }
 
     public Canal obtenerCanalPorTipo(String nombreCanal) {
