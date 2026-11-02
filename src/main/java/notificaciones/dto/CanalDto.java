@@ -5,8 +5,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 // DTO-07: salida de API-09 y API-10 (CU-08)
 @Schema(description = "DTO-07: canal de envío y si está habilitado")
 public class CanalDto {
+    @Schema(description = "Tipo de canal", example = "EMAIL", allowableValues = { "EMAIL", "PUSH", "IN_APP" })
     private String tipo;
+    @Schema(description = "Nombre descriptivo del canal", example = "Correo electrónico")
     private String nombre;
+    @Schema(description = "true si el canal acepta notificaciones nuevas (RN-07)", example = "true")
     private boolean activo;
 
     public CanalDto(String tipo, String nombre, boolean activo) {

@@ -1,0 +1,952 @@
+openapi: 3.1.0
+info:
+  title: DeliveryGo - Módulo Notificaciones
+  description: |-
+    Contrato común para que cualquier módulo del ecosistema (Usuarios, Pedidos, Pagos, Logística) solicite una notificación indicando destinatario, plantilla, canal (opcional) y parámetros, sin lógica particular por tipo de evento.
+
+    Además del contrato común expone el historial por usuario, la administración de plantillas y canales, la consulta de intentos y la bandeja interna (marcar como leída).
+
+    **Datos de prueba cargados al iniciar** (las plantillas se pueden listar con GET /api/v1/templates)
+
+    | plantillaId | Canal | Parámetros que requiere |
+    |---|---|---|
+    | 1 | EMAIL | nombre, pedidoId |
+    | 2 | PUSH | monto |
+    | 3 | IN_APP | codigo |
+
+    | destinatarioId | Usuario simulado |
+    |---|---|
+    | 10 | Activo, con email y pushToken |
+    | 11 | Activo, con email y sin pushToken |
+    | 12 | Inactivo |
+
+    El envío por EMAIL y PUSH es simulado y falla aproximadamente 3 de cada 10 veces, para poder probar el reintento. IN_APP siempre se entrega.
+
+    La validación del destinatario contra Usuarios (INT-01) es momentánea: se usa un cliente simulado hasta que el equipo de Usuarios publique su API.
+
+    Todos los errores devuelven el mismo formato (ErrorResponseDto). Si se envía el header `X-Correlation-Id`, se devuelve el mismo valor en la respuesta de error.
+  version: "1.0"
+servers:
+- url: http://localhost:8089
+  description: Generated server url
+tags:
+- name: Historial
+  description: Historial de notificaciones de un usuario (CU-06)
+- name: Plantillas
+  description: Administración de plantillas de mensaje (CU-07)
+- name: Notificaciones
+  description: "Contrato común de notificaciones del ecosistema (CU-01, CU-04, CU-05,\
+    \ CU-09, CU-10)"
+- name: Canales
+  description: "Canales de envío EMAIL, PUSH e IN_APP (CU-08)"
+paths:
+  /api/v1/templates/{id}:
+    get:
+      tags:
+      - Plantillas
+      summary: Consultar una plantilla (CU-07)
+      operationId: consultarPlantilla
+      parameters:
+      - name: id
+        in: path
+        description: Id de la plantilla
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      responses:
+        "200":
+          description: Plantilla con sus variables
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlantillaResponseDto"
+        "404":
+          description: No existe una plantilla con ese id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                TEMPLATE_NOT_FOUND:
+                  description: TEMPLATE_NOT_FOUND
+                  value:
+                    timestamp: 2026-10-27T19:19:11
+                    status: 404
+                    code: TEMPLATE_NOT_FOUND
+                    message: La plantilla con id 999 no existe
+                    path: /api/v1/templates/999
+                    correlationId: a64ea3e6-5587-4a7b-bd77-005e498ae9c4
+    put:
+      tags:
+      - Plantillas
+      summary: Modificar una plantilla (CU-07)
+      description: "Reemplaza nombre, asunto, cuerpo y estado de la plantilla; si\
+        \ no se indica activa se conserva. El canal no puede cambiar. Las notificaciones\
+        \ ya generadas conservan su mensaje."
+      operationId: modificarPlantilla
+      parameters:
+      - name: id
+        in: path
+        description: Id de la plantilla
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlantillaRequestDto"
+        required: true
+      responses:
+        "200":
+          description: Plantilla modificada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlantillaResponseDto"
+        "400":
+          description: Faltan datos obligatorios o superan el largo máximo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+        "404":
+          description: No existe una plantilla con ese id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                TEMPLATE_NOT_FOUND:
+                  description: TEMPLATE_NOT_FOUND
+                  value:
+                    timestamp: 2026-10-27T19:19:11
+                    status: 404
+                    code: TEMPLATE_NOT_FOUND
+                    message: La plantilla con id 999 no existe
+                    path: /api/v1/templates/999
+                    correlationId: a64ea3e6-5587-4a7b-bd77-005e498ae9c4
+        "409":
+          description: Otra plantilla ya usa ese nombre
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+        "422":
+          description: Se intentó cambiar el canal (RN-10)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                TEMPLATE_CHANNEL_IMMUTABLE:
+                  description: TEMPLATE_CHANNEL_IMMUTABLE
+                  value:
+                    status: 422
+                    code: TEMPLATE_CHANNEL_IMMUTABLE
+                    message: La plantilla 1 pertenece al canal EMAIL y no puede cambiarlo
+  /api/v1/templates:
+    get:
+      tags:
+      - Plantillas
+      summary: Listar las plantillas (CU-07)
+      description: Para que los módulos solicitantes conozcan los ids de plantilla
+        y las variables que cada una exige.
+      operationId: listarPlantillas
+      responses:
+        "200":
+          description: "Todas las plantillas, activas o no"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlantillaResponseDto"
+    post:
+      tags:
+      - Plantillas
+      summary: Crear una plantilla (CU-07)
+      description: "Crea una plantilla de un canal. Las variables del cuerpo van entre\
+        \ llaves, por ejemplo {pedidoId}: el solicitante deberá enviarlas como pará\
+        metros. Si no se indica activa, queda activa."
+      operationId: crearPlantilla
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlantillaRequestDto"
+        required: true
+      responses:
+        "201":
+          description: Plantilla creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlantillaResponseDto"
+        "400":
+          description: "Faltan datos obligatorios, superan el largo máximo o el canal\
+            \ no existe"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+        "409":
+          description: Ya existe una plantilla con ese nombre
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                TEMPLATE_DUPLICATED:
+                  description: TEMPLATE_DUPLICATED
+                  value:
+                    status: 409
+                    code: TEMPLATE_DUPLICATED
+                    message: Ya existe una plantilla con el nombre PEDIDO_CONFIRMADO_EMAIL
+  /api/v1/notifications:
+    post:
+      tags:
+      - Notificaciones
+      summary: Crear una notificación (CU-01)
+      description: |-
+        Registra la solicitud, genera el mensaje a partir de la plantilla y los parámetros (CU-02) y lo envía por el canal (CU-03), todo en una sola operación.
+
+        El canal es opcional (CU-08): si se omite se usa el de la plantilla; si se indica, debe coincidir con el de la plantilla.
+
+        Responde 201 tanto si el envío salió bien (ENVIADA) como si falló (FALLIDA): un envío fallido queda registrado y puede reintentarse con POST /api/v1/notifications/{id}/retry.
+
+        Si la solicitud no pasa las validaciones (400, 422) o Usuarios no responde (503), no se registra nada.
+      operationId: crearNotificacion
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrearNotificacionRequestDto"
+        required: true
+      responses:
+        "201":
+          description: "Notificación creada, con estado ENVIADA o FALLIDA"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificacionResponseDto"
+        "400":
+          description: "Falta destinatarioId o plantillaId (RN-01), o el JSON está\
+            \ mal formado"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                VALIDATION_ERROR:
+                  description: VALIDATION_ERROR
+                  value:
+                    timestamp: 2026-10-27T19:19:11
+                    status: 400
+                    code: VALIDATION_ERROR
+                    message: El campo plantillaId no puede ser nulo
+                    path: /api/v1/notifications
+                    correlationId: f42e7e74-c72a-4423-b931-0a2828508aee
+        "422":
+          description: La solicitud viola una regla de negocio
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                CHANNEL_INACTIVE:
+                  summary: Canal inexistente o inactivo (RN-07)
+                  description: CHANNEL_INACTIVE
+                  value:
+                    status: 422
+                    code: CHANNEL_INACTIVE
+                    message: El canal SMS no existe
+                RECIPIENT_NOT_FOUND:
+                  summary: Destinatario inexistente o inactivo (INT-01)
+                  description: RECIPIENT_NOT_FOUND
+                  value:
+                    status: 422
+                    code: RECIPIENT_NOT_FOUND
+                    message: El destinatario 999 no existe o está inactivo
+                RECIPIENT_CONTACT_MISSING:
+                  summary: Falta el email o pushToken que pide el canal (RN-09)
+                  description: RECIPIENT_CONTACT_MISSING
+                  value:
+                    status: 422
+                    code: RECIPIENT_CONTACT_MISSING
+                    message: El destinatario 11 no tiene el dato de contacto que requiere
+                      el canal PUSH
+                TEMPLATE_INVALID:
+                  summary: "Plantilla inexistente, inactiva o de otro canal (RN-02)"
+                  description: TEMPLATE_INVALID
+                  value:
+                    status: 422
+                    code: TEMPLATE_INVALID
+                    message: "La plantilla 1 no existe, está inactiva o pertenece\
+                      \ a otro canal"
+                TEMPLATE_PARAMS_MISSING:
+                  summary: Faltan parámetros de la plantilla (RN-08)
+                  description: TEMPLATE_PARAMS_MISSING
+                  value:
+                    status: 422
+                    code: TEMPLATE_PARAMS_MISSING
+                    message: Faltan los parámetros pedidoId
+        "503":
+          description: El módulo Usuarios no respondió (INT-01)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                USERS_SERVICE_UNAVAILABLE:
+                  description: USERS_SERVICE_UNAVAILABLE
+                  value:
+                    status: 503
+                    code: USERS_SERVICE_UNAVAILABLE
+                    message: El módulo Usuarios no está disponible
+  /api/v1/notifications/{id}/retry:
+    post:
+      tags:
+      - Notificaciones
+      summary: Reintentar una notificación fallida (CU-05)
+      description: |-
+        Solo se puede reintentar una notificación en estado FALLIDA. Cada reintento registra un nuevo intento; al llegar al máximo (3 intentos) la notificación queda FALLIDA_DEFINITIVA y ya no se puede reintentar.
+
+        Responde 200 con el estado resultante: ENVIADA, FALLIDA o FALLIDA_DEFINITIVA.
+      operationId: reintentarNotificacion
+      parameters:
+      - name: id
+        in: path
+        description: Id de la notificación
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      responses:
+        "200":
+          description: Reintento procesado; el estado indica el resultado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificacionResponseDto"
+        "404":
+          description: No existe una notificación con ese id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                NOTIFICATION_NOT_FOUND:
+                  description: NOTIFICATION_NOT_FOUND
+                  value:
+                    timestamp: 2026-10-27T19:19:11
+                    status: 404
+                    code: NOTIFICATION_NOT_FOUND
+                    message: La notificación con id 999 no existe
+                    path: /api/v1/notifications/999
+                    correlationId: a64ea3e6-5587-4a7b-bd77-005e498ae9c4
+        "409":
+          description: La notificación no se puede reintentar en su estado actual
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                NOTIFICATION_NOT_RETRYABLE:
+                  summary: No está FALLIDA (RN-05)
+                  description: NOTIFICATION_NOT_RETRYABLE
+                  value:
+                    status: 409
+                    code: NOTIFICATION_NOT_RETRYABLE
+                    message: La notificación 1 está en estado ENVIADA y solo puede
+                      reintentarse si está FALLIDA
+                MAX_RETRIES_EXCEEDED:
+                  summary: Ya alcanzó el máximo de intentos (RN-04)
+                  description: MAX_RETRIES_EXCEEDED
+                  value:
+                    status: 409
+                    code: MAX_RETRIES_EXCEEDED
+                    message: La notificación 1 alcanzó el máximo de intentos y ya
+                      no puede reintentarse
+  /api/v1/notifications/{id}/read:
+    patch:
+      tags:
+      - Notificaciones
+      summary: Marcar una notificación interna como leída (CU-10)
+      description: "Solo las notificaciones del canal IN_APP ya ENVIADAS pueden marcarse\
+        \ como leídas. La operación es idempotente: si ya estaba leída devuelve 200\
+        \ con la fecha de la primera lectura."
+      operationId: marcarComoLeida
+      parameters:
+      - name: id
+        in: path
+        description: Id de la notificación
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      responses:
+        "200":
+          description: Notificación leída; fechaLectura indica cuándo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificacionResponseDto"
+        "404":
+          description: No existe una notificación con ese id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                NOTIFICATION_NOT_FOUND:
+                  description: NOTIFICATION_NOT_FOUND
+                  value:
+                    timestamp: 2026-10-27T19:19:11
+                    status: 404
+                    code: NOTIFICATION_NOT_FOUND
+                    message: La notificación con id 999 no existe
+                    path: /api/v1/notifications/999
+                    correlationId: a64ea3e6-5587-4a7b-bd77-005e498ae9c4
+        "409":
+          description: La notificación todavía no fue entregada (RN-12)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                NOTIFICATION_NOT_DELIVERED:
+                  description: NOTIFICATION_NOT_DELIVERED
+                  value:
+                    status: 409
+                    code: NOTIFICATION_NOT_DELIVERED
+                    message: La notificación 1 está en estado FALLIDA y solo puede
+                      leerse una vez ENVIADA
+        "422":
+          description: La notificación no es del canal IN_APP (RN-12)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                NOTIFICATION_NOT_IN_APP:
+                  description: NOTIFICATION_NOT_IN_APP
+                  value:
+                    status: 422
+                    code: NOTIFICATION_NOT_IN_APP
+                    message: La notificación 1 es del canal EMAIL y solo las IN_APP
+                      pueden marcarse como leídas
+  /api/v1/channels/{tipo}:
+    patch:
+      tags:
+      - Canales
+      summary: Habilitar o deshabilitar un canal (CU-08)
+      description: "Con el canal deshabilitado no se aceptan solicitudes nuevas por\
+        \ ese canal (CHANNEL_INACTIVE). Las notificaciones ya registradas no cambian,\
+        \ pero sus reintentos fallan mientras el canal siga inactivo. Es idempotente."
+      operationId: cambiarEstadoCanal
+      parameters:
+      - name: tipo
+        in: path
+        description: Tipo de canal
+        required: true
+        schema:
+          type: string
+          enum:
+          - EMAIL
+          - PUSH
+          - IN_APP
+        example: PUSH
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CanalEstadoRequestDto"
+        required: true
+      responses:
+        "200":
+          description: Canal con su estado actual
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CanalDto"
+        "400":
+          description: Falta el campo activo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+        "404":
+          description: El canal no existe
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                CHANNEL_NOT_FOUND:
+                  description: CHANNEL_NOT_FOUND
+                  value:
+                    status: 404
+                    code: CHANNEL_NOT_FOUND
+                    message: El canal SMS no existe
+  /api/v1/users/{id}/notifications:
+    get:
+      tags:
+      - Historial
+      summary: Consultar el historial de notificaciones de un usuario (CU-06)
+      description: |-
+        Devuelve las notificaciones del destinatario, las más recientes primero, paginadas (page, size, sort). Cada elemento incluye el mensaje generado. Se puede filtrar por estado, canal y, para la bandeja interna, por leídas o no leídas.
+
+        Un usuario sin notificaciones devuelve una página vacía. No consulta al módulo Usuarios.
+      operationId: consultarHistorial
+      parameters:
+      - name: id
+        in: path
+        description: Id del usuario destinatario
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 10
+      - name: estado
+        in: query
+        description: Filtra por estado
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDIENTE
+          - ENVIADA
+          - FALLIDA
+          - FALLIDA_DEFINITIVA
+        example: ENVIADA
+      - name: canal
+        in: query
+        description: Filtra por canal
+        required: false
+        schema:
+          type: string
+          enum:
+          - EMAIL
+          - PUSH
+          - IN_APP
+        example: IN_APP
+      - name: leida
+        in: query
+        description: "true: solo leídas; false: solo no leídas (CU-10)"
+        required: false
+        schema:
+          type: boolean
+      - name: page
+        in: query
+        description: "Número de página, desde 0"
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        description: "Elementos por página, de 1 a 100"
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      - name: sort
+        in: query
+        description: "campo,asc|desc. Campos: id, fechaCreacion, fechaUltimoIntento,\
+          \ estado, cantidadIntentos"
+        required: false
+        schema:
+          type: string
+        example: "fechaCreacion,desc"
+      responses:
+        "200":
+          description: "Página del historial, posiblemente vacía"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginaResponseDtoNotificacionResponseDto"
+        "400":
+          description: "Filtro, paginación u orden inválidos, o el id no es numérico"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+  /api/v1/notifications/{id}:
+    get:
+      tags:
+      - Notificaciones
+      summary: Consultar el estado de una notificación (CU-04)
+      operationId: consultarEstado
+      parameters:
+      - name: id
+        in: path
+        description: Id de la notificación
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      responses:
+        "200":
+          description: Estado actual de la notificación
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificacionResponseDto"
+        "400":
+          description: El id no es numérico
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+        "404":
+          description: No existe una notificación con ese id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                NOTIFICATION_NOT_FOUND:
+                  description: NOTIFICATION_NOT_FOUND
+                  value:
+                    timestamp: 2026-10-27T19:19:11
+                    status: 404
+                    code: NOTIFICATION_NOT_FOUND
+                    message: La notificación con id 999 no existe
+                    path: /api/v1/notifications/999
+                    correlationId: a64ea3e6-5587-4a7b-bd77-005e498ae9c4
+  /api/v1/notifications/{id}/attempts:
+    get:
+      tags:
+      - Notificaciones
+      summary: Consultar los intentos de envío de una notificación (CU-09)
+      description: "Devuelve cada intento de envío en el orden en que ocurrió, con\
+        \ su resultado y, si falló, el motivo. No incluye el mensaje (RN-06)."
+      operationId: consultarIntentos
+      parameters:
+      - name: id
+        in: path
+        description: Id de la notificación
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      responses:
+        "200":
+          description: "Intentos de la notificación, del primero al último"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IntentoEnvioResponseDto"
+        "404":
+          description: No existe una notificación con ese id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+              examples:
+                NOTIFICATION_NOT_FOUND:
+                  description: NOTIFICATION_NOT_FOUND
+                  value:
+                    timestamp: 2026-10-27T19:19:11
+                    status: 404
+                    code: NOTIFICATION_NOT_FOUND
+                    message: La notificación con id 999 no existe
+                    path: /api/v1/notifications/999
+                    correlationId: a64ea3e6-5587-4a7b-bd77-005e498ae9c4
+  /api/v1/channels:
+    get:
+      tags:
+      - Canales
+      summary: Listar los canales (CU-08)
+      description: Los canales disponibles para el campo canal de POST /api/v1/notifications
+        y si están habilitados.
+      operationId: listarCanales
+      responses:
+        "200":
+          description: "EMAIL, PUSH e IN_APP con su estado"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CanalDto"
+components:
+  schemas:
+    PlantillaRequestDto:
+      type: object
+      description: "DTO-05: alta o modificación de una plantilla"
+      properties:
+        nombre:
+          type: string
+          description: Nombre único de la plantilla
+          example: PEDIDO_ENTREGADO_EMAIL
+        asunto:
+          type: string
+          description: Asunto del mensaje
+          example: Pedido entregado
+        cuerpo:
+          type: string
+          description: "Cuerpo con variables entre llaves, que el solicitante completa\
+            \ con sus parámetros"
+          example: "Hola {nombre}, tu pedido {pedidoId} fue entregado."
+        activa:
+          type: boolean
+          description: "Si no se indica, la plantilla se crea activa"
+          example: true
+        canal:
+          type: string
+          description: Canal al que pertenece. Obligatorio al crear; al modificar
+            no puede cambiar
+          enum:
+          - EMAIL
+          - PUSH
+          - IN_APP
+          example: EMAIL
+      required:
+      - asunto
+      - cuerpo
+      - nombre
+    ErrorResponseDto:
+      type: object
+      description: "DTO-03: formato común de error de todas las APIs"
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+          format: int32
+          description: Código HTTP
+          example: 422
+        code:
+          type: string
+          description: Código de error para que el llamador decida qué hacer
+          example: TEMPLATE_PARAMS_MISSING
+        message:
+          type: string
+          description: Detalle legible del error
+          example: Faltan los parámetros pedidoId
+        path:
+          type: string
+          example: /api/v1/notifications
+        correlationId:
+          type: string
+          description: Id para seguir la solicitud entre módulos; se reutiliza el
+            header X-Correlation-Id si viene
+          example: f42e7e74-c72a-4423-b931-0a2828508aee
+    PlantillaResponseDto:
+      type: object
+      description: "DTO-06: plantilla con las variables que el solicitante debe enviar\
+        \ como parámetros"
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        nombre:
+          type: string
+          example: PEDIDO_CONFIRMADO_EMAIL
+        asunto:
+          type: string
+          example: Pedido confirmado
+        cuerpo:
+          type: string
+          example: "Hola {nombre}, tu pedido {pedidoId} fue confirmado."
+        activa:
+          type: boolean
+          example: true
+        canal:
+          type: string
+          enum:
+          - EMAIL
+          - PUSH
+          - IN_APP
+          example: EMAIL
+        variables:
+          type: array
+          description: "Variables del cuerpo: los parámetros que la plantilla exige\
+            \ (RN-08)"
+          example:
+          - nombre
+          - pedidoId
+          items:
+            type: string
+    CrearNotificacionRequestDto:
+      type: object
+      description: "DTO-01: solicitud de notificación del contrato común"
+      properties:
+        destinatarioId:
+          type: integer
+          format: int64
+          description: Id del usuario destinatario (módulo Usuarios)
+          example: 10
+        plantillaId:
+          type: integer
+          format: int64
+          description: Id de la plantilla; define el tipo de notificación y el canal
+            al que pertenece
+          example: 1
+        canal:
+          type: string
+          description: "Canal de envío (CU-08). Opcional: si se omite se usa el canal\
+            \ de la plantilla; si se indica debe coincidir con el de la plantilla"
+          enum:
+          - EMAIL
+          - PUSH
+          - IN_APP
+          example: EMAIL
+        parametros:
+          type: object
+          additionalProperties:
+            type: string
+          description: Valores para las variables de la plantilla; los que la plantilla
+            no usa se descartan
+          example:
+            nombre: Ana
+            pedidoId: "55"
+      required:
+      - destinatarioId
+      - plantillaId
+    NotificacionResponseDto:
+      type: object
+      description: "DTO-02: estado de una notificación. Solo el historial (CU-06)\
+        \ incluye el mensaje"
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        destinatarioId:
+          type: integer
+          format: int64
+          example: 10
+        plantillaId:
+          type: integer
+          format: int64
+          example: 1
+        canal:
+          type: string
+          enum:
+          - EMAIL
+          - PUSH
+          - IN_APP
+          example: EMAIL
+        estado:
+          type: string
+          description: "PENDIENTE, ENVIADA, FALLIDA (se puede reintentar) o FALLIDA_DEFINITIVA"
+          enum:
+          - PENDIENTE
+          - ENVIADA
+          - FALLIDA
+          - FALLIDA_DEFINITIVA
+          example: ENVIADA
+        cantidadIntentos:
+          type: integer
+          format: int32
+          description: Intentos de envío realizados (máximo 3)
+          example: 1
+        fechaCreacion:
+          type: string
+          format: date-time
+        fechaUltimoIntento:
+          type: string
+          format: date-time
+          description: Ausente si todavía no hubo intentos
+        fechaLectura:
+          type: string
+          format: date-time
+          description: Solo en notificaciones IN_APP leídas (CU-10)
+        mensaje:
+          type: string
+          description: Mensaje generado; solo se informa en el historial del destinatario
+            (CU-06)
+    CanalEstadoRequestDto:
+      type: object
+      description: "DTO-08: habilita o deshabilita un canal"
+      properties:
+        activo:
+          type: boolean
+          description: "true habilita el canal, false lo deshabilita"
+          example: false
+      required:
+      - activo
+    CanalDto:
+      type: object
+      description: "DTO-07: canal de envío y si está habilitado"
+      properties:
+        tipo:
+          type: string
+          description: Tipo de canal
+          enum:
+          - EMAIL
+          - PUSH
+          - IN_APP
+          example: EMAIL
+        nombre:
+          type: string
+          description: Nombre descriptivo del canal
+          example: Correo electrónico
+        activo:
+          type: boolean
+          description: true si el canal acepta notificaciones nuevas (RN-07)
+          example: true
+    PaginaResponseDtoNotificacionResponseDto:
+      type: object
+      description: "DTO-10: página de resultados"
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificacionResponseDto"
+        page:
+          type: integer
+          format: int32
+          description: "Número de página, desde 0"
+          example: 0
+        size:
+          type: integer
+          format: int32
+          example: 20
+        totalElements:
+          type: integer
+          format: int64
+          description: Total de elementos que cumplen el filtro
+          example: 42
+        totalPages:
+          type: integer
+          format: int32
+          example: 3
+    IntentoEnvioResponseDto:
+      type: object
+      description: "DTO-09: un intento de envío de una notificación"
+      properties:
+        numeroIntento:
+          type: integer
+          format: int32
+          example: 1
+        fecha:
+          type: string
+          format: date-time
+        resultado:
+          type: string
+          enum:
+          - EXITOSO
+          - FALLIDO
+          example: FALLIDO
+        detalleError:
+          type: string
+          description: Motivo del fallo; ausente si el intento fue exitoso
+          example: Fallo simulado del proveedor EMAIL
