@@ -98,9 +98,13 @@ public class NotificacionServices {
     }
 
     private Notificacion obtenerNotificacion(Long id) {
-        return notificacionRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("NOTIFICATION_NOT_FOUND",
-                        "La notificación con id " + id + " no existe"));
+        return notificacionRepository.findById(id).orElseThrow(() -> noEncontrada(id));
+    }
+
+    // 404 común a CU-04, CU-05, CU-09 y CU-10
+    private RecursoNoEncontradoException noEncontrada(Long id) {
+        return new RecursoNoEncontradoException("NOTIFICATION_NOT_FOUND",
+                "La notificación con id " + id + " no existe");
     }
 
     // Entidad → DTO-02: la entidad no sale del service. El mensaje solo se informa en el historial (CU-06)
@@ -193,8 +197,7 @@ public class NotificacionServices {
     public NotificacionResponseDto reintentarNotificacion(Long id) {
         // REP-07: un segundo reintento simultáneo espera acá y después ve el estado que dejó el primero
         Notificacion notificacion = notificacionRepository.findByIdParaActualizar(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("NOTIFICATION_NOT_FOUND",
-                        "La notificación con id " + id + " no existe"));
+                .orElseThrow(() -> noEncontrada(id));
 
         // RN-04 y RN-05
         if (notificacion.getEstado() == EstadoNotificacion.FALLIDA_DEFINITIVA) {
@@ -206,9 +209,8 @@ public class NotificacionServices {
                     + " está en estado " + notificacion.getEstado() + " y solo puede reintentarse si está FALLIDA");
         }
 
+        // No hace falta guardar acá: procesarEnvio guarda al final, dentro de la misma transacción
         notificacion.volverAPendiente();
-        notificacionRepository.save(notificacion);
-
         procesarEnvio(notificacion);
 
         return toDto(notificacion);
