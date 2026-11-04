@@ -15,7 +15,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import jakarta.servlet.http.HttpServletRequest;
 import notificaciones.dto.ErrorResponseDto;
 
-// Traduce las excepciones a DTO-03 para todas las APIs del módulo (API-01 a API-03)
+// Traduce las excepciones a DTO-03 para todas las APIs del módulo (API-01 a API-12)
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
