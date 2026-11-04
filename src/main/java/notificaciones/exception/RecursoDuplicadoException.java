@@ -1,6 +1,6 @@
 package notificaciones.exception;
 
-// 409: el recurso que se intenta crear ya existe
+// 409: el recurso que se intenta crear ya existe (TEMPLATE_DUPLICATED)
 public class RecursoDuplicadoException extends NotificacionesException {
     public RecursoDuplicadoException(String code, String message) {
         super(code, message);

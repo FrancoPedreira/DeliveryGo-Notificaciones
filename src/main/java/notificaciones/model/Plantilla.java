@@ -118,8 +118,4 @@ public class Plantilla {
     public Canal getCanal() {
         return canal;
     }
-
-    public void setActiva(boolean activa) {
-        this.activa = activa;
-    }
 }

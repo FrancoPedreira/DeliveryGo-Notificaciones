@@ -3,27 +3,29 @@ package notificaciones.config;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
-import notificaciones.dto.CanalDto;
 import notificaciones.dto.PlantillaRequestDto;
-import notificaciones.services.CanalServices;
+import notificaciones.model.Canal;
+import notificaciones.model.TipoCanal;
+import notificaciones.repository.CanalRepository;
 import notificaciones.services.PlantillaServices;
 
-// Datos iniciales; después las plantillas se administran por API (CU-07) y los canales por API (CU-08)
+// Datos iniciales; después las plantillas se administran por API (CU-07) y los canales se habilitan o
+// deshabilitan por API (CU-08). Los canales no tienen alta por API: son siempre estos tres
 @Component
 public class DataLoader implements CommandLineRunner {
-    private final CanalServices canalServices;
+    private final CanalRepository canalRepository;
     private final PlantillaServices plantillaServices;
 
-    public DataLoader(CanalServices canalServices, PlantillaServices plantillaServices) {
-        this.canalServices = canalServices;
+    public DataLoader(CanalRepository canalRepository, PlantillaServices plantillaServices) {
+        this.canalRepository = canalRepository;
         this.plantillaServices = plantillaServices;
     }
 
     @Override
     public void run(String... args) {
-        canalServices.crearCanal(new CanalDto("EMAIL", "Correo electrónico", true));
-        canalServices.crearCanal(new CanalDto("PUSH", "Notificación push", true));
-        canalServices.crearCanal(new CanalDto("IN_APP", "Bandeja interna", true));
+        canalRepository.save(new Canal(TipoCanal.EMAIL, "Correo electrónico", true));
+        canalRepository.save(new Canal(TipoCanal.PUSH, "Notificación push", true));
+        canalRepository.save(new Canal(TipoCanal.IN_APP, "Bandeja interna", true));
 
         plantillaServices.crearPlantilla(new PlantillaRequestDto("PEDIDO_CONFIRMADO_EMAIL", "Pedido confirmado",
                 "Hola {nombre}, tu pedido {pedidoId} fue confirmado.", true, "EMAIL"));
