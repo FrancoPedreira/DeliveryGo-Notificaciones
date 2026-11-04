@@ -37,7 +37,7 @@ public class CanalServices {
     }
 
     private CanalDto toDto(Canal canal) {
-        return new CanalDto(canal.getTipo().name(), canal.getNombre(), canal.isActivo());
+        return new CanalDto(canal.getTipo().name(), canal.getNombre(), canal.estaHabilitado());
     }
 
     // SRV-08 (CU-08, REP-11): canales disponibles y si están habilitados

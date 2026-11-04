@@ -42,10 +42,6 @@ public class Canal {
         this.activo = true;
     }
 
-    public boolean isActivo() {
-        return activo;
-    }
-
     // Getters
     public Long getId() {
         return id;

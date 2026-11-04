@@ -86,7 +86,7 @@ public class Notificacion {
 
     // RN-12: marcar es idempotente, conserva la fecha de la primera lectura
     public void marcarComoLeida() {
-        if (fechaLectura == null) {
+        if (!estaLeida()) {
             // Milisegundos: la base no guarda los nanosegundos y la respuesta debe coincidir con lo persistido
             fechaLectura = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
         }
