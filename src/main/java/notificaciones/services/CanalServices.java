@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 import notificaciones.dto.CanalDto;
 import notificaciones.exception.RecursoDuplicadoException;
@@ -21,6 +22,19 @@ public class CanalServices {
 
     public CanalServices(CanalRepository canalRepository) {
         this.canalRepository = canalRepository;
+    }
+
+    // Único lugar que convierte el texto recibido ("email", "PUSH"...) en un canal de la base.
+    // Vacío si el texto no es un TipoCanal o el canal no está cargado; cada caso de uso decide qué error devolver
+    private Optional<Canal> buscarCanal(String nombreCanal) {
+        if (nombreCanal == null) {
+            return Optional.empty();
+        }
+        try {
+            return canalRepository.findByTipo(TipoCanal.valueOf(nombreCanal.trim().toUpperCase()));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     private CanalDto validarCanal(CanalDto canalDto) {
@@ -66,15 +80,9 @@ public class CanalServices {
         if (activo == null) {
             throw new ValidacionException("El campo activo no puede ser nulo");
         }
-        Canal canal;
-        try {
-            canal = canalRepository.findByTipo(TipoCanal.valueOf(tipoCanal.trim().toUpperCase())).orElse(null);
-        } catch (IllegalArgumentException e) {
-            canal = null;
-        }
-        if (canal == null) {
-            throw new RecursoNoEncontradoException("CHANNEL_NOT_FOUND", "El canal " + tipoCanal + " no existe");
-        }
+        // CU-08 A4: el canal a administrar no existe → 404
+        Canal canal = buscarCanal(tipoCanal).orElseThrow(() -> new RecursoNoEncontradoException("CHANNEL_NOT_FOUND",
+                "El canal " + tipoCanal + " no existe"));
 
         if (activo) {
             canal.activar();
@@ -84,30 +92,18 @@ public class CanalServices {
         return toDto(canalRepository.save(canal));
     }
 
+    // CU-07 A1: el canal de una plantilla no existe → 400
     public Canal obtenerCanalPorTipo(String nombreCanal) {
-        try {
-            return canalRepository.findByTipo(TipoCanal.valueOf(nombreCanal.trim().toUpperCase()))
-                    .orElseThrow(() -> new ValidacionException("El canal " + nombreCanal + " no existe."));
-        } catch (IllegalArgumentException e) {
-            throw new ValidacionException("El canal " + nombreCanal + " no existe.");
-        }
+        return buscarCanal(nombreCanal)
+                .orElseThrow(() -> new ValidacionException("El canal " + nombreCanal + " no existe."));
     }
 
-    // RN-07 (REP-06): el canal solicitado debe existir y estar activo
+    // RN-07 (REP-06), CU-01 A2: el canal solicitado debe existir y estar activo → si no, 422
     @Transactional(readOnly = true)
     public Canal obtenerCanalActivo(String nombreCanal) {
-        TipoCanal tipo;
-        try {
-            tipo = TipoCanal.valueOf(nombreCanal.trim().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new ReglaNegocioException("CHANNEL_INACTIVE", "El canal " + nombreCanal + " no existe");
-        }
-
-        Canal canal = canalRepository.findByTipo(tipo).orElse(null);
-        if (canal == null || !canal.estaHabilitado()) {
-            throw new ReglaNegocioException("CHANNEL_INACTIVE",
-                    "El canal " + tipo + " no existe o está inactivo");
-        }
-        return canal;
+        return buscarCanal(nombreCanal)
+                .filter(Canal::estaHabilitado)
+                .orElseThrow(() -> new ReglaNegocioException("CHANNEL_INACTIVE",
+                        "El canal " + nombreCanal + " no existe o está inactivo"));
     }
 }
