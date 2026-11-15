@@ -24,11 +24,15 @@ info:
 
     La validación del destinatario contra Usuarios (INT-01) es momentánea: se usa un cliente simulado hasta que el equipo de Usuarios publique su API.
 
-    Todos los errores devuelven el mismo formato (ErrorResponseDto). Si se envía el header `X-Correlation-Id`, se devuelve el mismo valor en la respuesta de error.
+    Todos los errores devuelven el mismo formato (ErrorResponseDto). Todas las respuestas devuelven el header `X-Correlation-Id`: el que envió el llamador o uno generado.
+
+    **Seguridad:** todas las APIs requieren `Authorization: Bearer <JWT>` (botón Authorize). El token lo emite el módulo Usuarios; este módulo solo lo valida. Crear o modificar plantillas y habilitar o deshabilitar canales requiere el rol ADMIN.
   version: "1.0"
 servers:
 - url: http://localhost:8089
   description: Generated server url
+security:
+- bearerAuth: []
 tags:
 - name: Historial
   description: Historial de notificaciones de un usuario (CU-06)
@@ -78,6 +82,10 @@ paths:
                     message: La plantilla con id 999 no existe
                     path: /api/v1/templates/999
                     correlationId: a64ea3e6-5587-4a7b-bd77-005e498ae9c4
+        "401":
+          description: Falta el token o es inválido (UNAUTHORIZED)
+        "403":
+          description: El rol del token no puede hacer esta operación (FORBIDDEN)
     put:
       tags:
       - Plantillas
@@ -149,6 +157,10 @@ paths:
                     status: 422
                     code: TEMPLATE_CHANNEL_IMMUTABLE
                     message: La plantilla 1 pertenece al canal EMAIL y no puede cambiarlo
+        "401":
+          description: Falta el token o es inválido (UNAUTHORIZED)
+        "403":
+          description: El rol del token no puede hacer esta operación (FORBIDDEN)
   /api/v1/templates:
     get:
       tags:
@@ -166,6 +178,10 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PlantillaResponseDto"
+        "401":
+          description: Falta el token o es inválido (UNAUTHORIZED)
+        "403":
+          description: El rol del token no puede hacer esta operación (FORBIDDEN)
     post:
       tags:
       - Plantillas
@@ -207,6 +223,10 @@ paths:
                     status: 409
                     code: TEMPLATE_DUPLICATED
                     message: Ya existe una plantilla con el nombre PEDIDO_CONFIRMADO_EMAIL
+        "401":
+          description: Falta el token o es inválido (UNAUTHORIZED)
+        "403":
+          description: El rol del token no puede hacer esta operación (FORBIDDEN)
   /api/v1/notifications:
     post:
       tags:
@@ -308,6 +328,10 @@ paths:
                     status: 503
                     code: USERS_SERVICE_UNAVAILABLE
                     message: El módulo Usuarios no está disponible
+        "401":
+          description: Falta el token o es inválido (UNAUTHORIZED)
+        "403":
+          description: El rol del token no puede hacer esta operación (FORBIDDEN)
   /api/v1/notifications/{id}/retry:
     post:
       tags:
@@ -373,6 +397,10 @@ paths:
                     code: MAX_RETRIES_EXCEEDED
                     message: La notificación 1 alcanzó el máximo de intentos y ya
                       no puede reintentarse
+        "401":
+          description: Falta el token o es inválido (UNAUTHORIZED)
+        "403":
+          description: El rol del token no puede hacer esta operación (FORBIDDEN)
   /api/v1/notifications/{id}/read:
     patch:
       tags:
@@ -442,6 +470,10 @@ paths:
                     code: NOTIFICATION_NOT_IN_APP
                     message: La notificación 1 es del canal EMAIL y solo las IN_APP
                       pueden marcarse como leídas
+        "401":
+          description: Falta el token o es inválido (UNAUTHORIZED)
+        "403":
+          description: El rol del token no puede hacer esta operación (FORBIDDEN)
   /api/v1/channels/{tipo}:
     patch:
       tags:
@@ -495,6 +527,10 @@ paths:
                     status: 404
                     code: CHANNEL_NOT_FOUND
                     message: El canal SMS no existe
+        "401":
+          description: Falta el token o es inválido (UNAUTHORIZED)
+        "403":
+          description: El rol del token no puede hacer esta operación (FORBIDDEN)
   /api/v1/users/{id}/notifications:
     get:
       tags:
@@ -580,6 +616,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponseDto"
+        "401":
+          description: Falta el token o es inválido (UNAUTHORIZED)
+        "403":
+          description: El rol del token no puede hacer esta operación (FORBIDDEN)
   /api/v1/notifications/{id}:
     get:
       tags:
@@ -624,6 +664,10 @@ paths:
                     message: La notificación con id 999 no existe
                     path: /api/v1/notifications/999
                     correlationId: a64ea3e6-5587-4a7b-bd77-005e498ae9c4
+        "401":
+          description: Falta el token o es inválido (UNAUTHORIZED)
+        "403":
+          description: El rol del token no puede hacer esta operación (FORBIDDEN)
   /api/v1/notifications/{id}/attempts:
     get:
       tags:
@@ -666,6 +710,10 @@ paths:
                     message: La notificación con id 999 no existe
                     path: /api/v1/notifications/999
                     correlationId: a64ea3e6-5587-4a7b-bd77-005e498ae9c4
+        "401":
+          description: Falta el token o es inválido (UNAUTHORIZED)
+        "403":
+          description: El rol del token no puede hacer esta operación (FORBIDDEN)
   /api/v1/channels:
     get:
       tags:
@@ -683,6 +731,10 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/CanalDto"
+        "401":
+          description: Falta el token o es inválido (UNAUTHORIZED)
+        "403":
+          description: El rol del token no puede hacer esta operación (FORBIDDEN)
 components:
   schemas:
     PlantillaRequestDto:
@@ -950,3 +1002,8 @@ components:
           type: string
           description: Motivo del fallo; ausente si el intento fue exitoso
           example: Fallo simulado del proveedor EMAIL
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

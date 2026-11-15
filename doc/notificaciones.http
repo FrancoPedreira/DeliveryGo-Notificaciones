@@ -11,10 +11,16 @@
 ###  3. Datos de prueba del DataLoader:
 ###       plantillas: 1 = EMAIL {nombre, pedidoId} | 2 = PUSH {monto} | 3 = IN_APP {codigo}
 ###       usuarios:   10 = Ana (email + push) | 11 = Bruno (sin push) | 12 = Carla (inactiva)
+###  4. Todas las requests envían un JWT (Authorization: Bearer). @token tiene rol ADMIN.
 ### =====================================================================
 
 @host = http://localhost:8089
 @api = {{host}}/api/v1
+
+# Tokens de DESARROLLO (vencen en 2030). Solo sirven con la clave por defecto de application.properties;
+# cuando el módulo Usuarios emita los tokens reales, reemplazarlos por el que devuelve su login.
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJBRE1JTiIsImV4cCI6MTg5MzQ1NjAwMH0.gOaJcaOHfCedaEnmkyVrUjg81bRnGE4bO6kw4D0gnaA
+@tokenCliente = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbGllbnRlIiwicm9sZSI6IkNMSUVOVEUiLCJleHAiOjE4OTM0NTYwMDB9.ljb7dAe-oEly2-iVwIoOk8huNvOFsNOkm9PQOUUp6Qw
 
 
 ################################################################
@@ -23,6 +29,7 @@
 
 ### API-01 / CU-01 — Crear notificación EMAIL (queda con id 1) → 201 ENVIADA
 POST {{api}}/notifications
+Authorization: Bearer {{token}}
 Content-Type: application/json
 X-Correlation-Id: demo-001
 
@@ -34,6 +41,7 @@ X-Correlation-Id: demo-001
 
 ### API-01 / CU-01 — Crear notificación PUSH (id 2) → 201
 POST {{api}}/notifications
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -45,6 +53,7 @@ Content-Type: application/json
 
 ### API-01 / CU-01 — Crear notificación IN_APP (id 3) → 201
 POST {{api}}/notifications
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -55,33 +64,42 @@ Content-Type: application/json
 
 ### API-02 / CU-04 — Consultar el estado de la notificación 1 → 200
 GET {{api}}/notifications/1
+Authorization: Bearer {{token}}
 
 ### API-11 / CU-09 — Consultar los intentos de envío de la notificación 1 → 200
 GET {{api}}/notifications/1/attempts
+Authorization: Bearer {{token}}
 
 ### API-12 / CU-10 — Marcar como leída la notificación IN_APP 3 → 200 (idempotente)
 PATCH {{api}}/notifications/3/read
+Authorization: Bearer {{token}}
 
 ### API-04 / CU-06 — Historial del usuario 10 → 200
 GET {{api}}/users/10/notifications
+Authorization: Bearer {{token}}
 
 ### API-04 / CU-06 — Historial con filtros y paginado → 200
 GET {{api}}/users/10/notifications?canal=IN_APP&leida=true&page=0&size=10
+Authorization: Bearer {{token}}
 
 ### API-03 / CU-05 — Reintentar una notificación FALLIDA → 200
 ### Solo aplica a una notificación FALLIDA. Con tasa-fallo=0 no hay ninguna; para probarlo arrancar con
 ### --notificaciones.emisor.tasa-fallo=0.3, crear notificaciones EMAIL hasta que una quede FALLIDA y
 ### reemplazar el id. Con el id 1 (ENVIADA) devuelve 409, ver sección de errores.
 POST {{api}}/notifications/1/retry
+Authorization: Bearer {{token}}
 
 ### API-05 / CU-07 — Listar plantillas → 200
 GET {{api}}/templates
+Authorization: Bearer {{token}}
 
 ### API-07 / CU-07 — Consultar la plantilla 1 → 200
 GET {{api}}/templates/1
+Authorization: Bearer {{token}}
 
 ### API-06 / CU-07 — Crear una plantilla (el nombre debe ser único; si se repite → 409) → 201
 POST {{api}}/templates
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -94,6 +112,7 @@ Content-Type: application/json
 
 ### API-08 / CU-07 — Modificar la plantilla 1 (el canal no se puede cambiar) → 200
 PUT {{api}}/templates/1
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -106,15 +125,18 @@ Content-Type: application/json
 
 ### API-09 / CU-08 — Listar canales → 200
 GET {{api}}/channels
+Authorization: Bearer {{token}}
 
 ### API-10 / CU-08 — Deshabilitar el canal PUSH → 200
 PATCH {{api}}/channels/PUSH
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "activo": false }
 
 ### API-10 / CU-08 — Volver a habilitar el canal PUSH (para no romper el resto de la demo) → 200
 PATCH {{api}}/channels/PUSH
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "activo": true }
@@ -126,6 +148,7 @@ Content-Type: application/json
 
 ### 400 VALIDATION_ERROR — falta plantillaId
 POST {{api}}/notifications
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -135,6 +158,7 @@ Content-Type: application/json
 
 ### 422 TEMPLATE_PARAMS_MISSING — la plantilla 1 necesita nombre y pedidoId, falta pedidoId
 POST {{api}}/notifications
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -145,6 +169,7 @@ Content-Type: application/json
 
 ### 422 RECIPIENT_CONTACT_MISSING — Bruno (11) no tiene pushToken y la plantilla 2 es PUSH
 POST {{api}}/notifications
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -155,6 +180,7 @@ Content-Type: application/json
 
 ### 422 RECIPIENT_NOT_FOUND — Carla (12) está inactiva (un id inexistente da lo mismo)
 POST {{api}}/notifications
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -165,18 +191,23 @@ Content-Type: application/json
 
 ### 404 NOTIFICATION_NOT_FOUND — la notificación no existe
 GET {{api}}/notifications/999999
+Authorization: Bearer {{token}}
 
 ### 404 TEMPLATE_NOT_FOUND — la plantilla no existe
 GET {{api}}/templates/999999
+Authorization: Bearer {{token}}
 
 ### 409 NOTIFICATION_NOT_RETRYABLE — reintentar la notificación 1, que está ENVIADA (no FALLIDA)
 POST {{api}}/notifications/1/retry
+Authorization: Bearer {{token}}
 
 ### 422 NOTIFICATION_NOT_IN_APP — marcar como leída la notificación 1, que es EMAIL
 PATCH {{api}}/notifications/1/read
+Authorization: Bearer {{token}}
 
 ### 409 TEMPLATE_DUPLICATED — crear una plantilla con un nombre que ya existe
 POST {{api}}/templates
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -186,3 +217,13 @@ Content-Type: application/json
   "activa": true,
   "canal": "EMAIL"
 }
+
+### 401 UNAUTHORIZED — sin token
+GET {{host}}/api/v1/channels
+
+### 403 FORBIDDEN — un token sin rol ADMIN no puede administrar canales
+PATCH {{host}}/api/v1/channels/PUSH
+Authorization: Bearer {{tokenCliente}}
+Content-Type: application/json
+
+{ "activo": false }
