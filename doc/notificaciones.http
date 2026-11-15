@@ -89,7 +89,7 @@ Authorization: Bearer {{token}}
 POST {{api}}/notifications/1/retry
 Authorization: Bearer {{token}}
 
-### API-05 / CU-07 — Listar plantillas → 200
+### API-08 / CU-07 — Listar plantillas → 200
 GET {{api}}/templates
 Authorization: Bearer {{token}}
 
@@ -97,7 +97,7 @@ Authorization: Bearer {{token}}
 GET {{api}}/templates/1
 Authorization: Bearer {{token}}
 
-### API-06 / CU-07 — Crear una plantilla (el nombre debe ser único; si se repite → 409) → 201
+### API-05 / CU-07 — Crear una plantilla (el nombre debe ser único; si se repite → 409) → 201
 POST {{api}}/templates
 Authorization: Bearer {{token}}
 Content-Type: application/json
@@ -110,7 +110,7 @@ Content-Type: application/json
   "canal": "EMAIL"
 }
 
-### API-08 / CU-07 — Modificar la plantilla 1 (el canal no se puede cambiar) → 200
+### API-06 / CU-07 — Modificar la plantilla 1 (el canal no se puede cambiar) → 200
 PUT {{api}}/templates/1
 Authorization: Bearer {{token}}
 Content-Type: application/json
