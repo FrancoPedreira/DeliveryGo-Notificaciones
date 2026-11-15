@@ -33,7 +33,8 @@ public class SecurityConfig {
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
                         // Público: documentación y consola de la base de pruebas
-                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/h2-console/**")
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/v3/api-docs.yaml",
+                                "/h2-console/**")
                         .permitAll()
                         // Solo ADMIN administra plantillas y canales (CU-07 y CU-08)
                         .requestMatchers(HttpMethod.POST, "/api/v1/templates/**").hasRole("ADMIN")

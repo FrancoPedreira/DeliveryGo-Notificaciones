@@ -106,6 +106,7 @@ class SeguridadTest {
     @Test
     void swaggerEsPublico() throws Exception {
         mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
+        mockMvc.perform(get("/v3/api-docs.yaml")).andExpect(status().isOk());
     }
 
     // CORS: el navegador pregunta con OPTIONS (preflight, sin token) antes de la llamada real

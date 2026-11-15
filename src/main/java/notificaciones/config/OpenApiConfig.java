@@ -1,11 +1,13 @@
 package notificaciones.config;
 
+import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 
@@ -52,7 +54,22 @@ public class OpenApiConfig {
                                 La validación del destinatario contra Usuarios (INT-01) es momentánea: se usa un \
                                 cliente simulado hasta que el equipo de Usuarios publique su API.
 
-                                Todos los errores devuelven el mismo formato (ErrorResponseDto). Si se envía el header \
-                                `X-Correlation-Id`, se devuelve el mismo valor en la respuesta de error."""));
+                                Todos los errores devuelven el mismo formato (ErrorResponseDto). Todas las respuestas \
+                                devuelven el header `X-Correlation-Id`: el que envió el llamador o uno generado.
+
+                                **Seguridad:** todas las APIs requieren `Authorization: Bearer <JWT>` (botón \
+                                Authorize). El token lo emite el módulo Usuarios; este módulo solo lo valida. \
+                                Crear o modificar plantillas y habilitar o deshabilitar canales requiere el rol ADMIN."""));
+    }
+
+    // Todas las APIs pueden responder 401 y 403: se documentan acá una sola vez en lugar de repetirlo en cada una
+    @Bean
+    public OpenApiCustomizer respuestasDeSeguridad() {
+        return openApi -> openApi.getPaths().values().forEach(path -> path.readOperations().forEach(operacion -> {
+            operacion.getResponses().addApiResponse("401",
+                    new ApiResponse().description("Falta el token o es inválido (UNAUTHORIZED)"));
+            operacion.getResponses().addApiResponse("403",
+                    new ApiResponse().description("El rol del token no puede hacer esta operación (FORBIDDEN)"));
+        }));
     }
 }

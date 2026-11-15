@@ -24,8 +24,8 @@ usuario. El módulo también administra las plantillas de mensajes y los canales
 ## Instalación y ejecución
 
 ```bash
-git clone <url-del-repo>
-cd Notificacion
+git clone https://github.com/FrancoPedreira/DeliveryGo-Notificaciones.git
+cd DeliveryGo-Notificaciones
 ./mvnw spring-boot:run        # en Windows: mvnw.cmd spring-boot:run
 ```
 
@@ -206,7 +206,33 @@ una notificación ENVIADA y 422 al marcar como leída una de EMAIL). Se ejecuta 
 iniciada; para que los resultados sean deterministas conviene arrancar con
 `--notificaciones.emisor.tasa-fallo=0` (instrucciones en el encabezado del archivo).
 
-## Tests
+## Guía para la demo
+
+1. Arrancar sin fallos simulados, para que los resultados sean siempre los mismos:
+   `./mvnw spring-boot:run "-Dspring-boot.run.arguments=--notificaciones.emisor.tasa-fallo=0"`
+2. Abrir Swagger (http://localhost:8089/swagger-ui.html), tocar **Authorize** y pegar el token `ADMIN` de la
+   sección [Seguridad](#seguridad-jwt-y-cors).
+3. **Caso principal:** crear una notificación (API-01), consultar su estado (API-02) y sus intentos (API-11).
+4. **Historial y bandeja interna:** crear una IN_APP (plantilla 3), marcarla como leída (API-12) y ver el
+   historial del usuario 10 (API-04).
+5. **Manejo de un error:** pedir la plantilla 2 (PUSH) para el usuario 11 → `422 RECIPIENT_CONTACT_MISSING`;
+   reintentar una notificación ENVIADA → `409`.
+6. **Seguridad:** repetir una llamada sin token → `401`; deshabilitar un canal con el token `CLIENTE` → `403`.
+7. **Reintento (CU-05):** reiniciar con `--notificaciones.emisor.tasa-fallo=1`, crear una notificación EMAIL
+   (queda `FALLIDA`) y reintentarla hasta que pase a `FALLIDA_DEFINITIVA` al tercer intento.
+8. **Caída de Usuarios:** reiniciar con `--notificaciones.usuarios.simular-caida=true` y crear una notificación
+   → `503 USERS_SERVICE_UNAVAILABLE`.
+
+Los mismos pasos están como requests listas para ejecutar en `doc/notificaciones.http`.
+
+## Documentación
+
+| Archivo | Contenido |
+|---|---|
+| `doc/TPO_Notificaciones_Grupo6_v1.3.docx` | Análisis y diseño: casos de uso, reglas de negocio, modelo, diagramas y decisiones técnicas. |
+| `doc/openapi.yaml` | Contrato OpenAPI, generado desde la aplicación (`/v3/api-docs.yaml`). |
+| `doc/notificaciones.http` | Colección de requests para la demo. |
+
 
 ```bash
 ./mvnw test        # en Windows: mvnw.cmd test
