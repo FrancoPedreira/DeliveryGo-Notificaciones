@@ -48,9 +48,44 @@ entorno o argumento (`--notificaciones.max-intentos=5`).
 | `notificaciones.max-intentos` | `3` | Cantidad máxima de intentos de envío por notificación (RN-04). Al alcanzarla, no se puede reintentar. |
 | `notificaciones.emisor.tasa-fallo` | `0.3` | Probabilidad (0 a 1) de que el envío simulado por EMAIL o PUSH falle. IN_APP nunca falla. |
 | `notificaciones.usuarios.simular-caida` | `false` | Si es `true`, el cliente simulado de Usuarios lanza `USERS_SERVICE_UNAVAILABLE` (503). Sirve para probar la caída de Usuarios. |
+| `notificaciones.jwt.secret` | clave de desarrollo | Clave con la que se valida la firma de los JWT (HS256, mínimo 32 caracteres). Debe ser la misma que usa Usuarios. Se define con la variable de entorno `JWT_SECRET`; el valor por defecto es solo para desarrollo. |
+| `notificaciones.cors.origenes-permitidos` | `http://localhost:5173` | Orígenes (separados por coma) desde los que el Portal Web puede llamar a la API. |
 | `notificaciones.usuarios.modo` | `simulado` | Implementación del cliente de Usuarios (INT-01): `simulado` (usuarios fijos en memoria) o `http` (llama al módulo Usuarios real). |
 | `notificaciones.usuarios.base-url` | `http://localhost:8080` | URL base del módulo Usuarios. Solo se usa con `modo=http`; el valor por defecto es un placeholder. |
 | `notificaciones.usuarios.timeout-ms` | `2000` | Timeout en milisegundos (conexión y lectura) de las llamadas a Usuarios. Solo con `modo=http`. |
+
+## Seguridad (JWT y CORS)
+
+Todas las APIs requieren el header `Authorization: Bearer <token>` con un JWT.
+
+**Notificaciones no emite tokens ni tiene login**: los emite el módulo Usuarios cuando el usuario inicia sesión.
+Este módulo solo los **valida** (firma y vencimiento) con la misma clave con la que Usuarios los firma, y lee
+dos datos del token: `sub` (el usuario) y `role` (su rol).
+
+| Ruta | Quién puede |
+|---|---|
+| `/swagger-ui.html`, `/v3/api-docs`, `/h2-console` | Público |
+| `POST` / `PUT /api/v1/templates`, `PATCH /api/v1/channels/{tipo}` | Solo rol `ADMIN` |
+| El resto de las APIs | Cualquier token válido |
+
+Sin token, o con un token inválido o vencido, la respuesta es `401 UNAUTHORIZED`; con un token válido pero sin
+el rol necesario, `403 FORBIDDEN`. Los dos usan el formato de error común.
+
+Las clases están en el paquete `security/`: `JwtService` (valida el token), `JwtAuthFilter` (lo lee del
+header en cada solicitud) y `SecurityConfig` (reglas por ruta y CORS).
+
+**CORS:** el Portal Web puede llamar a esta API desde el navegador. Los orígenes permitidos se configuran con
+`notificaciones.cors.origenes-permitidos` (por defecto `http://localhost:5173`).
+
+**Tokens de desarrollo.** Mientras Usuarios no emita los tokens reales, se pueden usar estos, firmados con la
+clave de desarrollo (vencen en 2030). En Swagger UI se cargan con el botón **Authorize**.
+
+- Rol `ADMIN`: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJBRE1JTiIsImV4cCI6MTg5MzQ1NjAwMH0.gOaJcaOHfCedaEnmkyVrUjg81bRnGE4bO6kw4D0gnaA`
+- Rol `CLIENTE`: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbGllbnRlIiwicm9sZSI6IkNMSUVOVEUiLCJleHAiOjE4OTM0NTYwMDB9.ljb7dAe-oEly2-iVwIoOk8huNvOFsNOkm9PQOUUp6Qw`
+
+> **Pendiente de acordar con el equipo de Usuarios:** la clave y el algoritmo de firma (hoy HS256 con clave
+> compartida) y los nombres de los claims (`sub`, `role`). Si usan otros, se ajustan `JwtService` y
+> `JwtAuthFilter`.
 
 ## Endpoints
 
@@ -93,7 +128,7 @@ Para crear una notificación, este módulo consulta los datos de contacto del de
 
 Existe además un cliente HTTP real (`UsuariosClientHttp`, basado en `RestClient`) que se activa con
 `notificaciones.usuarios.modo=http`; por defecto el modo es `simulado`, así que nada cambia hasta que se
-configure. Llama a `GET {base-url}/api/v1/users/{id}/contact`, propaga el `X-Correlation-Id` y tiene un
+configure. Llama a `GET {base-url}/api/v1/users/{id}/contact`, propaga el `X-Correlation-Id` y el JWT recibido, y tiene un
 timeout configurable (`notificaciones.usuarios.timeout-ms`, 2000 ms por defecto):
 
 | Respuesta de Usuarios | Resultado |
@@ -148,6 +183,7 @@ cualquier otro id dan `422 RECIPIENT_NOT_FOUND`.
 ```bash
 curl -X POST http://localhost:8089/api/v1/notifications \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
         "destinatarioId": 10,
         "plantillaId": 1,
@@ -162,7 +198,7 @@ El resultado es una notificación en estado `ENVIADA` o `FALLIDA` (por la tasa d
 
 `doc/notificaciones.http` (formato REST Client de VS Code / cliente HTTP de IntelliJ) cubre las 12 APIs con los
 datos de prueba del DataLoader: caminos felices y los errores principales (400 falta `plantillaId`,
-422 `TEMPLATE_PARAMS_MISSING`, 422 `RECIPIENT_CONTACT_MISSING` con el usuario 11 y PUSH, 404, 409 al reintentar
+422 `TEMPLATE_PARAMS_MISSING`, 422 `RECIPIENT_CONTACT_MISSING` con el usuario 11 y PUSH, 401, 403, 404, 409 al reintentar
 una notificación ENVIADA y 422 al marcar como leída una de EMAIL). Se ejecuta en orden sobre una base recién
 iniciada; para que los resultados sean deterministas conviene arrancar con
 `--notificaciones.emisor.tasa-fallo=0` (instrucciones en el encabezado del archivo).
@@ -181,8 +217,9 @@ Incluye tests de services y de controllers (MockMvc) para los 10 casos de uso.
 - **El envío por EMAIL y PUSH es simulado**: no se manda ningún mail ni push real; solo se registra el intento
   y falla ~30 % de las veces a propósito.
 - **H2 en memoria**: los datos (incluidas las notificaciones) se pierden al reiniciar la aplicación.
-- **Sin autenticación JWT todavía**: no hay Spring Security ni Bearer token. Depende de cómo emita el token
-  el módulo Usuarios y está pendiente de consultar con el docente.
+- **JWT sin integrar con Usuarios**: la validación está implementada, pero la clave y los claims todavía
+  no se acordaron con el equipo de Usuarios; por ahora se prueba con tokens de desarrollo (ver
+  [Seguridad](#seguridad-jwt-y-cors)).
 - **Pendiente de decisión del equipo**: renombrar paquetes y clases (`services` → `service`,
   `NotificacionServices` → ...).
 - **Pendiente de acordar con los otros equipos**: las fechas son `LocalDateTime` sin zona horaria; pasar a un
