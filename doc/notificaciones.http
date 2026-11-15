@@ -1,0 +1,188 @@
+### =====================================================================
+### Módulo Notificaciones — colección de requests para la demo
+### Formato compatible con REST Client (VS Code) y con el cliente HTTP de IntelliJ.
+###
+### Cómo usarla:
+###  1. Para una demo determinista, arrancar sin fallos simulados y con la base limpia:
+###       ./mvnw spring-boot:run "-Dspring-boot.run.arguments=--notificaciones.emisor.tasa-fallo=0"
+###     (con la tasa por defecto, 0.3, EMAIL y PUSH fallan ~30 % de las veces a propósito)
+###  2. Ejecutar los requests EN ORDEN, de arriba hacia abajo: los ids de las notificaciones
+###     (1, 2, 3...) son los que asigna una base recién creada.
+###  3. Datos de prueba del DataLoader:
+###       plantillas: 1 = EMAIL {nombre, pedidoId} | 2 = PUSH {monto} | 3 = IN_APP {codigo}
+###       usuarios:   10 = Ana (email + push) | 11 = Bruno (sin push) | 12 = Carla (inactiva)
+### =====================================================================
+
+@host = http://localhost:8089
+@api = {{host}}/api/v1
+
+
+################################################################
+### 1. CAMINOS FELICES
+################################################################
+
+### API-01 / CU-01 — Crear notificación EMAIL (queda con id 1) → 201 ENVIADA
+POST {{api}}/notifications
+Content-Type: application/json
+X-Correlation-Id: demo-001
+
+{
+  "destinatarioId": 10,
+  "plantillaId": 1,
+  "parametros": { "nombre": "Ana", "pedidoId": "55" }
+}
+
+### API-01 / CU-01 — Crear notificación PUSH (id 2) → 201
+POST {{api}}/notifications
+Content-Type: application/json
+
+{
+  "destinatarioId": 10,
+  "plantillaId": 2,
+  "canal": "PUSH",
+  "parametros": { "monto": "$1500" }
+}
+
+### API-01 / CU-01 — Crear notificación IN_APP (id 3) → 201
+POST {{api}}/notifications
+Content-Type: application/json
+
+{
+  "destinatarioId": 10,
+  "plantillaId": 3,
+  "parametros": { "codigo": "ENV-789" }
+}
+
+### API-02 / CU-04 — Consultar el estado de la notificación 1 → 200
+GET {{api}}/notifications/1
+
+### API-11 / CU-09 — Consultar los intentos de envío de la notificación 1 → 200
+GET {{api}}/notifications/1/attempts
+
+### API-12 / CU-10 — Marcar como leída la notificación IN_APP 3 → 200 (idempotente)
+PATCH {{api}}/notifications/3/read
+
+### API-04 / CU-06 — Historial del usuario 10 → 200
+GET {{api}}/users/10/notifications
+
+### API-04 / CU-06 — Historial con filtros y paginado → 200
+GET {{api}}/users/10/notifications?canal=IN_APP&leida=true&page=0&size=10
+
+### API-03 / CU-05 — Reintentar una notificación FALLIDA → 200
+### Solo aplica a una notificación FALLIDA. Con tasa-fallo=0 no hay ninguna; para probarlo arrancar con
+### --notificaciones.emisor.tasa-fallo=0.3, crear notificaciones EMAIL hasta que una quede FALLIDA y
+### reemplazar el id. Con el id 1 (ENVIADA) devuelve 409, ver sección de errores.
+POST {{api}}/notifications/1/retry
+
+### API-05 / CU-07 — Listar plantillas → 200
+GET {{api}}/templates
+
+### API-07 / CU-07 — Consultar la plantilla 1 → 200
+GET {{api}}/templates/1
+
+### API-06 / CU-07 — Crear una plantilla (el nombre debe ser único; si se repite → 409) → 201
+POST {{api}}/templates
+Content-Type: application/json
+
+{
+  "nombre": "ENTREGA_DEMORADA_EMAIL",
+  "asunto": "Tu entrega se demora",
+  "cuerpo": "Hola {nombre}, tu pedido {pedidoId} llegará más tarde.",
+  "activa": true,
+  "canal": "EMAIL"
+}
+
+### API-08 / CU-07 — Modificar la plantilla 1 (el canal no se puede cambiar) → 200
+PUT {{api}}/templates/1
+Content-Type: application/json
+
+{
+  "nombre": "PEDIDO_CONFIRMADO_EMAIL",
+  "asunto": "Pedido confirmado",
+  "cuerpo": "Hola {nombre}, tu pedido {pedidoId} fue confirmado. ¡Gracias!",
+  "activa": true,
+  "canal": "EMAIL"
+}
+
+### API-09 / CU-08 — Listar canales → 200
+GET {{api}}/channels
+
+### API-10 / CU-08 — Deshabilitar el canal PUSH → 200
+PATCH {{api}}/channels/PUSH
+Content-Type: application/json
+
+{ "activo": false }
+
+### API-10 / CU-08 — Volver a habilitar el canal PUSH (para no romper el resto de la demo) → 200
+PATCH {{api}}/channels/PUSH
+Content-Type: application/json
+
+{ "activo": true }
+
+
+################################################################
+### 2. ERRORES PRINCIPALES (formato DTO-03: status, code, message, path, correlationId)
+################################################################
+
+### 400 VALIDATION_ERROR — falta plantillaId
+POST {{api}}/notifications
+Content-Type: application/json
+
+{
+  "destinatarioId": 10,
+  "parametros": { "nombre": "Ana", "pedidoId": "55" }
+}
+
+### 422 TEMPLATE_PARAMS_MISSING — la plantilla 1 necesita nombre y pedidoId, falta pedidoId
+POST {{api}}/notifications
+Content-Type: application/json
+
+{
+  "destinatarioId": 10,
+  "plantillaId": 1,
+  "parametros": { "nombre": "Ana" }
+}
+
+### 422 RECIPIENT_CONTACT_MISSING — Bruno (11) no tiene pushToken y la plantilla 2 es PUSH
+POST {{api}}/notifications
+Content-Type: application/json
+
+{
+  "destinatarioId": 11,
+  "plantillaId": 2,
+  "parametros": { "monto": "$1500" }
+}
+
+### 422 RECIPIENT_NOT_FOUND — Carla (12) está inactiva (un id inexistente da lo mismo)
+POST {{api}}/notifications
+Content-Type: application/json
+
+{
+  "destinatarioId": 12,
+  "plantillaId": 1,
+  "parametros": { "nombre": "Carla", "pedidoId": "55" }
+}
+
+### 404 NOTIFICATION_NOT_FOUND — la notificación no existe
+GET {{api}}/notifications/999999
+
+### 404 TEMPLATE_NOT_FOUND — la plantilla no existe
+GET {{api}}/templates/999999
+
+### 409 NOTIFICATION_NOT_RETRYABLE — reintentar la notificación 1, que está ENVIADA (no FALLIDA)
+POST {{api}}/notifications/1/retry
+
+### 422 NOTIFICATION_NOT_IN_APP — marcar como leída la notificación 1, que es EMAIL
+PATCH {{api}}/notifications/1/read
+
+### 409 TEMPLATE_DUPLICATED — crear una plantilla con un nombre que ya existe
+POST {{api}}/templates
+Content-Type: application/json
+
+{
+  "nombre": "PEDIDO_CONFIRMADO_EMAIL",
+  "asunto": "Duplicada",
+  "cuerpo": "Hola {nombre}",
+  "activa": true,
+  "canal": "EMAIL"
+}

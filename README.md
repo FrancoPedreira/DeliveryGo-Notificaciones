@@ -158,6 +158,15 @@ curl -X POST http://localhost:8089/api/v1/notifications \
 `canal` es opcional: si se omite se usa el de la plantilla; si se indica debe coincidir con el de la plantilla.
 El resultado es una notificación en estado `ENVIADA` o `FALLIDA` (por la tasa de fallo simulada).
 
+## Colección de requests para la demo
+
+`doc/notificaciones.http` (formato REST Client de VS Code / cliente HTTP de IntelliJ) cubre las 12 APIs con los
+datos de prueba del DataLoader: caminos felices y los errores principales (400 falta `plantillaId`,
+422 `TEMPLATE_PARAMS_MISSING`, 422 `RECIPIENT_CONTACT_MISSING` con el usuario 11 y PUSH, 404, 409 al reintentar
+una notificación ENVIADA y 422 al marcar como leída una de EMAIL). Se ejecuta en orden sobre una base recién
+iniciada; para que los resultados sean deterministas conviene arrancar con
+`--notificaciones.emisor.tasa-fallo=0` (instrucciones en el encabezado del archivo).
+
 ## Tests
 
 ```bash
