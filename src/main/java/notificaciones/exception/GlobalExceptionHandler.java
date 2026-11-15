@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -62,6 +64,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({ HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class })
     public ResponseEntity<ErrorResponseDto> handleRequestMalFormado(Exception e, HttpServletRequest request) {
         return construir(HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST", "La solicitud tiene un formato inválido",
+                request);
+    }
+
+    // 401: falta el token o es inválido (lo deriva SecurityConfig)
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponseDto> handleNoAutenticado(AuthenticationException e,
+            HttpServletRequest request) {
+        return construir(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED",
+                "Falta el token de autenticación o es inválido", request);
+    }
+
+    // 403: el token es válido pero su rol no puede hacer esta operación
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponseDto> handleSinPermiso(AccessDeniedException e, HttpServletRequest request) {
+        return construir(HttpStatus.FORBIDDEN, "FORBIDDEN", "No tiene permiso para realizar esta operación",
                 request);
     }
 

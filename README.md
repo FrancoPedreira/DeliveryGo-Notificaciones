@@ -18,13 +18,14 @@ usuario. El módulo también administra las plantillas de mensajes y los canales
 
 - **Java 21** (LTS). El `pom.xml` compila con `release 21`.
 - **Maven**: no hace falta instalarlo, el repo incluye el Maven wrapper (`mvnw` / `mvnw.cmd`).
-- Spring Boot 4.1.1 (Spring MVC, Spring Data JPA), base H2 en memoria, springdoc-openapi (Swagger UI).
+- Spring Boot 4.1.1 (Spring MVC, Spring Data JPA, Spring Security), base H2 en memoria, springdoc-openapi
+  (Swagger UI) y jjwt para validar los JWT.
 
 ## Instalación y ejecución
 
 ```bash
-git clone <url-del-repo>
-cd Notificacion
+git clone https://github.com/FrancoPedreira/DeliveryGo-Notificaciones.git
+cd DeliveryGo-Notificaciones
 ./mvnw spring-boot:run        # en Windows: mvnw.cmd spring-boot:run
 ```
 
@@ -48,9 +49,44 @@ entorno o argumento (`--notificaciones.max-intentos=5`).
 | `notificaciones.max-intentos` | `3` | Cantidad máxima de intentos de envío por notificación (RN-04). Al alcanzarla, no se puede reintentar. |
 | `notificaciones.emisor.tasa-fallo` | `0.3` | Probabilidad (0 a 1) de que el envío simulado por EMAIL o PUSH falle. IN_APP nunca falla. |
 | `notificaciones.usuarios.simular-caida` | `false` | Si es `true`, el cliente simulado de Usuarios lanza `USERS_SERVICE_UNAVAILABLE` (503). Sirve para probar la caída de Usuarios. |
+| `notificaciones.jwt.secret` | clave de desarrollo | Clave con la que se valida la firma de los JWT (HS256, mínimo 32 caracteres). Debe ser la misma que usa Usuarios. Se define con la variable de entorno `JWT_SECRET`; el valor por defecto es solo para desarrollo. |
+| `notificaciones.cors.origenes-permitidos` | `http://localhost:5173` | Orígenes (separados por coma) desde los que el Portal Web puede llamar a la API. |
 | `notificaciones.usuarios.modo` | `simulado` | Implementación del cliente de Usuarios (INT-01): `simulado` (usuarios fijos en memoria) o `http` (llama al módulo Usuarios real). |
 | `notificaciones.usuarios.base-url` | `http://localhost:8080` | URL base del módulo Usuarios. Solo se usa con `modo=http`; el valor por defecto es un placeholder. |
 | `notificaciones.usuarios.timeout-ms` | `2000` | Timeout en milisegundos (conexión y lectura) de las llamadas a Usuarios. Solo con `modo=http`. |
+
+## Seguridad (JWT y CORS)
+
+Todas las APIs requieren el header `Authorization: Bearer <token>` con un JWT.
+
+**Notificaciones no emite tokens ni tiene login**: los emite el módulo Usuarios cuando el usuario inicia sesión.
+Este módulo solo los **valida** (firma y vencimiento) con la misma clave con la que Usuarios los firma, y lee
+dos datos del token: `sub` (el usuario) y `role` (su rol).
+
+| Ruta | Quién puede |
+|---|---|
+| `/swagger-ui.html`, `/v3/api-docs`, `/h2-console` | Público |
+| `POST` / `PUT /api/v1/templates`, `PATCH /api/v1/channels/{tipo}` | Solo rol `ADMIN` |
+| El resto de las APIs | Cualquier token válido |
+
+Sin token, o con un token inválido o vencido, la respuesta es `401 UNAUTHORIZED`; con un token válido pero sin
+el rol necesario, `403 FORBIDDEN`. Los dos usan el formato de error común.
+
+Las clases están en el paquete `security/`: `JwtService` (valida el token), `JwtAuthFilter` (lo lee del
+header en cada solicitud) y `SecurityConfig` (reglas por ruta y CORS).
+
+**CORS:** el Portal Web puede llamar a esta API desde el navegador. Los orígenes permitidos se configuran con
+`notificaciones.cors.origenes-permitidos` (por defecto `http://localhost:5173`).
+
+**Tokens de desarrollo.** Mientras Usuarios no emita los tokens reales, se pueden usar estos, firmados con la
+clave de desarrollo (vencen en 2030). En Swagger UI se cargan con el botón **Authorize**.
+
+- Rol `ADMIN`: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJBRE1JTiIsImV4cCI6MTg5MzQ1NjAwMH0.gOaJcaOHfCedaEnmkyVrUjg81bRnGE4bO6kw4D0gnaA`
+- Rol `CLIENTE`: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbGllbnRlIiwicm9sZSI6IkNMSUVOVEUiLCJleHAiOjE4OTM0NTYwMDB9.ljb7dAe-oEly2-iVwIoOk8huNvOFsNOkm9PQOUUp6Qw`
+
+> **Pendiente de acordar con el equipo de Usuarios:** la clave y el algoritmo de firma (hoy HS256 con clave
+> compartida) y los nombres de los claims (`sub`, `role`). Si usan otros, se ajustan `JwtService` y
+> `JwtAuthFilter`.
 
 ## Endpoints
 
@@ -93,7 +129,7 @@ Para crear una notificación, este módulo consulta los datos de contacto del de
 
 Existe además un cliente HTTP real (`UsuariosClientHttp`, basado en `RestClient`) que se activa con
 `notificaciones.usuarios.modo=http`; por defecto el modo es `simulado`, así que nada cambia hasta que se
-configure. Llama a `GET {base-url}/api/v1/users/{id}/contact`, propaga el `X-Correlation-Id` y tiene un
+configure. Llama a `GET {base-url}/api/v1/users/{id}/contact`, propaga el `X-Correlation-Id` y el JWT recibido, y tiene un
 timeout configurable (`notificaciones.usuarios.timeout-ms`, 2000 ms por defecto):
 
 | Respuesta de Usuarios | Resultado |
@@ -148,6 +184,7 @@ cualquier otro id dan `422 RECIPIENT_NOT_FOUND`.
 ```bash
 curl -X POST http://localhost:8089/api/v1/notifications \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
         "destinatarioId": 10,
         "plantillaId": 1,
@@ -157,32 +194,66 @@ curl -X POST http://localhost:8089/api/v1/notifications \
 
 `canal` es opcional: si se omite se usa el de la plantilla; si se indica debe coincidir con el de la plantilla.
 El resultado es una notificación en estado `ENVIADA` o `FALLIDA` (por la tasa de fallo simulada).
+El mensaje final (la plantilla con los parámetros ya reemplazados) no puede superar los 1000 caracteres;
+si los supera, la respuesta es `400 VALIDATION_ERROR`.
 
 ## Colección de requests para la demo
 
 `doc/notificaciones.http` (formato REST Client de VS Code / cliente HTTP de IntelliJ) cubre las 12 APIs con los
 datos de prueba del DataLoader: caminos felices y los errores principales (400 falta `plantillaId`,
-422 `TEMPLATE_PARAMS_MISSING`, 422 `RECIPIENT_CONTACT_MISSING` con el usuario 11 y PUSH, 404, 409 al reintentar
+422 `TEMPLATE_PARAMS_MISSING`, 422 `RECIPIENT_CONTACT_MISSING` con el usuario 11 y PUSH, 401, 403, 404, 409 al reintentar
 una notificación ENVIADA y 422 al marcar como leída una de EMAIL). Se ejecuta en orden sobre una base recién
 iniciada; para que los resultados sean deterministas conviene arrancar con
 `--notificaciones.emisor.tasa-fallo=0` (instrucciones en el encabezado del archivo).
 
-## Tests
+## Guía para la demo
+
+1. Arrancar sin fallos simulados, para que los resultados sean siempre los mismos:
+   `./mvnw spring-boot:run "-Dspring-boot.run.arguments=--notificaciones.emisor.tasa-fallo=0"`
+2. Abrir Swagger (http://localhost:8089/swagger-ui.html), tocar **Authorize** y pegar el token `ADMIN` de la
+   sección [Seguridad](#seguridad-jwt-y-cors).
+3. **Caso principal:** crear una notificación (API-01), consultar su estado (API-02) y sus intentos (API-11).
+4. **Historial y bandeja interna:** crear una IN_APP (plantilla 3), marcarla como leída (API-12) y ver el
+   historial del usuario 10 (API-04).
+5. **Manejo de un error:** pedir la plantilla 2 (PUSH) para el usuario 11 → `422 RECIPIENT_CONTACT_MISSING`;
+   reintentar una notificación ENVIADA → `409`.
+6. **Seguridad:** repetir una llamada sin token → `401`; deshabilitar un canal con el token `CLIENTE` → `403`.
+7. **Reintento (CU-05):** reiniciar con `--notificaciones.emisor.tasa-fallo=1`, crear una notificación EMAIL
+   (queda `FALLIDA`) y reintentarla hasta que pase a `FALLIDA_DEFINITIVA` al tercer intento.
+8. **Caída de Usuarios:** reiniciar con `--notificaciones.usuarios.simular-caida=true` y crear una notificación
+   → `503 USERS_SERVICE_UNAVAILABLE`.
+
+Los mismos pasos están como requests listas para ejecutar en `doc/notificaciones.http`.
+
+## Documentación
+
+| Archivo | Contenido |
+|---|---|
+| `doc/TPO_Notificaciones_Grupo6_v1.3.docx` | Análisis y diseño: casos de uso, reglas de negocio, modelo, diagramas y decisiones técnicas. |
+| `doc/openapi.yaml` | Contrato OpenAPI, generado desde la aplicación (`/v3/api-docs.yaml`). |
+| `doc/notificaciones.http` | Colección de requests para la demo. |
+
 
 ```bash
 ./mvnw test        # en Windows: mvnw.cmd test
 ```
 
-Incluye tests de services y de controllers (MockMvc) para los 10 casos de uso.
+Incluye tests de services y de controllers (MockMvc) para los 10 casos de uso, y además del
+`X-Correlation-Id`, del cliente HTTP de Usuarios (200, 404, 500 y timeout) y de la seguridad (401, 403 y CORS).
+Los tests de controllers envían automáticamente un token con rol `ADMIN` (`TokenDePrueba`).
 
 ## Limitaciones conocidas y pendientes
 
+- **El historial no está restringido por usuario**: cualquier token válido puede consultar el historial de
+  cualquier usuario. Restringirlo al propio usuario depende de qué dato trae el claim `sub` (id o username),
+  que hay que acordar con el equipo de Usuarios.
 - **Usuarios es simulado por defecto** (ver [INT-01](#int-01--notificaciones-consulta-a-usuarios)). El cliente HTTP real existe pero está sin probar contra el módulo real.
 - **El envío por EMAIL y PUSH es simulado**: no se manda ningún mail ni push real; solo se registra el intento
   y falla ~30 % de las veces a propósito.
 - **H2 en memoria**: los datos (incluidas las notificaciones) se pierden al reiniciar la aplicación.
-- **Sin autenticación JWT todavía**: no hay Spring Security ni Bearer token. Depende de cómo emita el token
-  el módulo Usuarios y está pendiente de consultar con el docente.
+- **JWT sin integrar con Usuarios**: la validación está implementada, pero la clave y los claims todavía
+  no se acordaron con el equipo de Usuarios; por ahora se prueba con tokens de desarrollo (ver
+  [Seguridad](#seguridad-jwt-y-cors)).
 - **Pendiente de decisión del equipo**: renombrar paquetes y clases (`services` → `service`,
   `NotificacionServices` → ...).
 - **Pendiente de acordar con los otros equipos**: las fechas son `LocalDateTime` sin zona horaria; pasar a un

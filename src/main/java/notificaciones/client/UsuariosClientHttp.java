@@ -12,6 +12,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -62,6 +64,11 @@ public class UsuariosClientHttp implements UsuariosClient {
                         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
                         if (correlationId != null) {
                             headers.set(CorrelationIdFilter.HEADER, correlationId);
+                        }
+                        // Reenvía el JWT de la solicitud entrante (lo deja JwtAuthFilter como credencial)
+                        Authentication autenticacion = SecurityContextHolder.getContext().getAuthentication();
+                        if (autenticacion != null && autenticacion.getCredentials() instanceof String token) {
+                            headers.setBearerAuth(token);
                         }
                     })
                     .exchange((request, response) -> {
