@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import notificaciones.dto.UsuarioContactoResponseDto;
@@ -12,7 +13,9 @@ import notificaciones.exception.ServicioNoDisponibleException;
 // DM-10: reemplaza a Usuarios hasta integrar el módulo real; se cambia por un cliente HTTP sin tocar los services
 // MOMENTÁNEO: implementación simulada mientras esperamos que el equipo de Usuarios publique su API.
 // Cuando esté disponible se modificará: se crea el cliente real y esta clase se elimina o queda solo para tests.
+// Es la implementación por defecto: notificaciones.usuarios.modo=simulado (o sin definir)
 @Component
+@ConditionalOnProperty(name = "notificaciones.usuarios.modo", havingValue = "simulado", matchIfMissing = true)
 public class UsuariosClientSimulado implements UsuariosClient {
     private static final Map<Long, UsuarioContactoResponseDto> USUARIOS = Map.of(
             10L, new UsuarioContactoResponseDto(10L, "Ana", "ana@mail.com", "push-token-ana", true),

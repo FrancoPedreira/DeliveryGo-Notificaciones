@@ -55,6 +55,17 @@ class NotificacionControllerTest {
     }
 
     @Test
+    void api01Devuelve400SiElMensajeGeneradoSuperaElLargoMaximo() throws Exception {
+        String body = "{\"destinatarioId\":10,\"plantillaId\":3,\"parametros\":{\"codigo\":\"" + "x".repeat(1500)
+                + "\"}}";
+
+        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value(containsString("1000")));
+    }
+
+    @Test
     void api01Devuelve400ConElFormatoDeErrorYElCorrelationIdDelLlamador() throws Exception {
         mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).header("X-Correlation-Id", "pedido-123")
                 .content("{\"destinatarioId\":10,\"canal\":\"EMAIL\"}"))

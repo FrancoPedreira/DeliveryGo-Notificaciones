@@ -24,6 +24,8 @@ public class PlantillaServices {
     private static final int MAX_NOMBRE = 255;
     private static final int MAX_ASUNTO = 255;
     private static final int MAX_CUERPO = 1000;
+    // Mismo largo que la columna mensaje de Notificacion
+    private static final int MAX_MENSAJE = 1000;
 
     private final PlantillaRepository plantillaRepository;
     private final CanalServices canalServices;
@@ -135,7 +137,13 @@ public class PlantillaServices {
         }
 
         // RN-08 y RN-06: si faltan parámetros lanza TEMPLATE_PARAMS_MISSING
+        String mensaje = plantilla.renderizar(parametros);
+
+        // El cuerpo entra en el límite, pero con parámetros muy largos el mensaje final puede pasarse
+        // del tamaño de la columna: se rechaza con 400 en vez de dejar que falle la base (500)
+        validateMaxLength(mensaje, "mensaje generado", MAX_MENSAJE);
+
         notificacion.setPlantilla(plantilla);
-        notificacion.setMensaje(plantilla.renderizar(parametros));
+        notificacion.setMensaje(mensaje);
     }
 }
