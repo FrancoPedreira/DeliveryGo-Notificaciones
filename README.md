@@ -69,6 +69,11 @@ Base: `/api/v1`. Todos devuelven JSON. Los errores usan el formato común DTO-03
 | API-11 | `GET` | `/api/v1/notifications/{id}/attempts` | CU-09 Consultar los intentos de envío |
 | API-12 | `PATCH` | `/api/v1/notifications/{id}/read` | CU-10 Marcar como leída una notificación interna (IN_APP) |
 
+**X-Correlation-Id:** todas las respuestas (exitosas y de error) devuelven el header `X-Correlation-Id`. Si el
+llamador lo envía se reutiliza; si no, se genera un UUID. En los errores, el `correlationId` del body es el
+mismo valor, y también aparece en los logs. Los módulos que nos llaman deberían enviarlo para poder seguir una
+solicitud entre módulos.
+
 El contrato completo (esquemas, ejemplos y códigos de error) está en Swagger y en `doc/openapi.yaml`.
 
 ## Integraciones
