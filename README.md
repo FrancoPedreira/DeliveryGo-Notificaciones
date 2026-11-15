@@ -48,6 +48,9 @@ entorno o argumento (`--notificaciones.max-intentos=5`).
 | `notificaciones.max-intentos` | `3` | Cantidad máxima de intentos de envío por notificación (RN-04). Al alcanzarla, no se puede reintentar. |
 | `notificaciones.emisor.tasa-fallo` | `0.3` | Probabilidad (0 a 1) de que el envío simulado por EMAIL o PUSH falle. IN_APP nunca falla. |
 | `notificaciones.usuarios.simular-caida` | `false` | Si es `true`, el cliente simulado de Usuarios lanza `USERS_SERVICE_UNAVAILABLE` (503). Sirve para probar la caída de Usuarios. |
+| `notificaciones.usuarios.modo` | `simulado` | Implementación del cliente de Usuarios (INT-01): `simulado` (usuarios fijos en memoria) o `http` (llama al módulo Usuarios real). |
+| `notificaciones.usuarios.base-url` | `http://localhost:8080` | URL base del módulo Usuarios. Solo se usa con `modo=http`; el valor por defecto es un placeholder. |
+| `notificaciones.usuarios.timeout-ms` | `2000` | Timeout en milisegundos (conexión y lectura) de las llamadas a Usuarios. Solo con `modo=http`. |
 
 ## Endpoints
 
@@ -87,6 +90,20 @@ Para crear una notificación, este módulo consulta los datos de contacto del de
 > que `UsuariosClientSimulado` devuelve usuarios fijos en memoria (10, 11 y 12). El endpoint y los campos de
 > DTO-04 son una propuesta nuestra y se ajustarán cuando Usuarios publique su contrato. El módulo depende de
 > la interfaz `UsuariosClient`, por lo que reemplazar la implementación no toca la lógica de negocio.
+
+Existe además un cliente HTTP real (`UsuariosClientHttp`, basado en `RestClient`) que se activa con
+`notificaciones.usuarios.modo=http`; por defecto el modo es `simulado`, así que nada cambia hasta que se
+configure. Llama a `GET {base-url}/api/v1/users/{id}/contact`, propaga el `X-Correlation-Id` y tiene un
+timeout configurable (`notificaciones.usuarios.timeout-ms`, 2000 ms por defecto):
+
+| Respuesta de Usuarios | Resultado |
+|---|---|
+| `200` | Contacto del usuario |
+| `404` | Usuario inexistente (`422 RECIPIENT_NOT_FOUND` en nuestra API) |
+| Timeout, error de conexión, `5xx` u otra respuesta inesperada | `503 USERS_SERVICE_UNAVAILABLE` |
+
+Esta implementación solo se probó contra servidores de prueba; no contra el módulo Usuarios real, porque su
+API todavía no está publicada.
 
 Si Usuarios no responde, la API devuelve `503` con código `USERS_SERVICE_UNAVAILABLE` y no se registra nada.
 
@@ -151,7 +168,7 @@ Incluye tests de services y de controllers (MockMvc) para los 10 casos de uso.
 
 ## Limitaciones conocidas y pendientes
 
-- **Usuarios es simulado** (ver [INT-01](#int-01--notificaciones-consulta-a-usuarios)).
+- **Usuarios es simulado por defecto** (ver [INT-01](#int-01--notificaciones-consulta-a-usuarios)). El cliente HTTP real existe pero está sin probar contra el módulo real.
 - **El envío por EMAIL y PUSH es simulado**: no se manda ningún mail ni push real; solo se registra el intento
   y falla ~30 % de las veces a propósito.
 - **H2 en memoria**: los datos (incluidas las notificaciones) se pierden al reiniciar la aplicación.
