@@ -18,7 +18,8 @@ usuario. El módulo también administra las plantillas de mensajes y los canales
 
 - **Java 21** (LTS). El `pom.xml` compila con `release 21`.
 - **Maven**: no hace falta instalarlo, el repo incluye el Maven wrapper (`mvnw` / `mvnw.cmd`).
-- Spring Boot 4.1.1 (Spring MVC, Spring Data JPA), base H2 en memoria, springdoc-openapi (Swagger UI).
+- Spring Boot 4.1.1 (Spring MVC, Spring Data JPA, Spring Security), base H2 en memoria, springdoc-openapi
+  (Swagger UI) y jjwt para validar los JWT.
 
 ## Instalación y ejecución
 
@@ -193,6 +194,8 @@ curl -X POST http://localhost:8089/api/v1/notifications \
 
 `canal` es opcional: si se omite se usa el de la plantilla; si se indica debe coincidir con el de la plantilla.
 El resultado es una notificación en estado `ENVIADA` o `FALLIDA` (por la tasa de fallo simulada).
+El mensaje final (la plantilla con los parámetros ya reemplazados) no puede superar los 1000 caracteres;
+si los supera, la respuesta es `400 VALIDATION_ERROR`.
 
 ## Colección de requests para la demo
 
@@ -209,10 +212,15 @@ iniciada; para que los resultados sean deterministas conviene arrancar con
 ./mvnw test        # en Windows: mvnw.cmd test
 ```
 
-Incluye tests de services y de controllers (MockMvc) para los 10 casos de uso.
+Incluye tests de services y de controllers (MockMvc) para los 10 casos de uso, y además del
+`X-Correlation-Id`, del cliente HTTP de Usuarios (200, 404, 500 y timeout) y de la seguridad (401, 403 y CORS).
+Los tests de controllers envían automáticamente un token con rol `ADMIN` (`TokenDePrueba`).
 
 ## Limitaciones conocidas y pendientes
 
+- **El historial no está restringido por usuario**: cualquier token válido puede consultar el historial de
+  cualquier usuario. Restringirlo al propio usuario depende de qué dato trae el claim `sub` (id o username),
+  que hay que acordar con el equipo de Usuarios.
 - **Usuarios es simulado por defecto** (ver [INT-01](#int-01--notificaciones-consulta-a-usuarios)). El cliente HTTP real existe pero está sin probar contra el módulo real.
 - **El envío por EMAIL y PUSH es simulado**: no se manda ningún mail ni push real; solo se registra el intento
   y falla ~30 % de las veces a propósito.
