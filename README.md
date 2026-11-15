@@ -99,10 +99,10 @@ Base: `/api/v1`. Todos devuelven JSON. Los errores usan el formato común DTO-03
 | API-02 | `GET` | `/api/v1/notifications/{id}` | CU-04 Consultar el estado de una notificación |
 | API-03 | `POST` | `/api/v1/notifications/{id}/retry` | CU-05 Reintentar una notificación fallida |
 | API-04 | `GET` | `/api/v1/users/{id}/notifications` | CU-06 Historial de un usuario (filtros `estado`, `canal`, `leida`; paginado `page`, `size`, `sort`) |
-| API-05 | `GET` | `/api/v1/templates` | CU-07 Listar plantillas |
-| API-06 | `POST` | `/api/v1/templates` | CU-07 Crear plantilla |
+| API-05 | `POST` | `/api/v1/templates` | CU-07 Crear plantilla |
+| API-06 | `PUT` | `/api/v1/templates/{id}` | CU-07 Modificar plantilla |
 | API-07 | `GET` | `/api/v1/templates/{id}` | CU-07 Consultar plantilla |
-| API-08 | `PUT` | `/api/v1/templates/{id}` | CU-07 Modificar plantilla |
+| API-08 | `GET` | `/api/v1/templates` | CU-07 Listar plantillas |
 | API-09 | `GET` | `/api/v1/channels` | CU-08 Listar canales |
 | API-10 | `PATCH` | `/api/v1/channels/{tipo}` | CU-08 Habilitar/deshabilitar un canal (`EMAIL`, `PUSH`, `IN_APP`) |
 | API-11 | `GET` | `/api/v1/notifications/{id}/attempts` | CU-09 Consultar los intentos de envío |
