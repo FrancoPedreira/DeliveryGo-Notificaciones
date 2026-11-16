@@ -1,7 +1,10 @@
 package notificaciones.dto;
 
-// DTO-04: respuesta de Usuarios en INT-01. Solo los datos mínimos de contacto (RN-06)
-// MOMENTÁNEO: campos propuestos por nosotros; se ajustarán cuando el equipo de Usuarios publique su API.
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+// DTO-04: datos de contacto que Notificaciones necesita para INT-01.
+// Usuarios informa el estado como texto; Notificaciones lo convierte en el booleano activo.
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class UsuarioContactoResponseDto {
     private Long id;
     private String nombre;
@@ -19,6 +22,11 @@ public class UsuarioContactoResponseDto {
         this.email = email;
         this.pushToken = pushToken;
         this.activo = activo;
+    }
+
+    // Usuarios devuelve "estado"; Notificaciones usa el booleano "activo".
+    public void setEstado(String estado) {
+        this.activo = "ACTIVO".equals(estado);
     }
 
     // Getters
