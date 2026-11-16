@@ -7,27 +7,28 @@
 ###       ./mvnw spring-boot:run "-Dspring-boot.run.arguments=--notificaciones.emisor.tasa-fallo=0"
 ###     (con la tasa por defecto, 0.3, EMAIL y PUSH fallan ~30 % de las veces a propósito)
 ###  2. Ejecutar los requests EN ORDEN, de arriba hacia abajo: los ids de las notificaciones
-###     (1, 2, 3...) son los que asigna una base recién creada.
+###     son los que asigna una base recién creada.
 ###  3. Datos de prueba del DataLoader:
 ###       plantillas: 1 = EMAIL {nombre, pedidoId} | 2 = PUSH {monto} | 3 = IN_APP {codigo}
+###                   4 = bienvenida EMAIL {nombre} | 5 = recuperación EMAIL {nombre, token}
 ###       usuarios:   10 = Ana (email + push) | 11 = Bruno (sin push) | 12 = Carla (inactiva)
-###  4. Todas las requests envían un JWT (Authorization: Bearer). @token tiene rol ADMIN.
+###  4. Todas las requests envían un JWT. Reemplazar los marcadores por tokens válidos de Usuarios:
+###     @token con rol ADMIN y @tokenCliente con rol CLIENTE. El claim sub debe ser numérico.
 ### =====================================================================
 
 @host = http://localhost:8089
 @api = {{host}}/api/v1
 
-# Tokens de DESARROLLO (vencen en 2030). Solo sirven con la clave por defecto de application.properties;
-# cuando el módulo Usuarios emita los tokens reales, reemplazarlos por el que devuelve su login.
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJBRE1JTiIsImV4cCI6MTg5MzQ1NjAwMH0.gOaJcaOHfCedaEnmkyVrUjg81bRnGE4bO6kw4D0gnaA
-@tokenCliente = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbGllbnRlIiwicm9sZSI6IkNMSUVOVEUiLCJleHAiOjE4OTM0NTYwMDB9.ljb7dAe-oEly2-iVwIoOk8huNvOFsNOkm9PQOUUp6Qw
+# Reemplazar localmente por JWT válidos emitidos por Usuarios. No guardar tokens reales en GitHub.
+@token = PEGAR_JWT_VALIDO_DE_USUARIOS_CON_ROLE_ADMIN
+@tokenCliente = PEGAR_JWT_VALIDO_DE_USUARIOS_CON_ROLE_CLIENTE
 
 
 ################################################################
 ### 1. CAMINOS FELICES
 ################################################################
 
-### API-01 / CU-01 — Crear notificación EMAIL (queda con id 1) → 201 ENVIADA
+### API-01 / CU-01 — Crear notificación EMAIL (queda con id 1) → 201
 POST {{api}}/notifications
 Authorization: Bearer {{token}}
 Content-Type: application/json
@@ -60,6 +61,28 @@ Content-Type: application/json
   "destinatarioId": 10,
   "plantillaId": 3,
   "parametros": { "codigo": "ENV-789" }
+}
+
+### API-01 / CU-01 — Bienvenida por email con la plantilla 4
+POST {{api}}/notifications
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "destinatarioId": 10,
+  "plantillaId": 4,
+  "parametros": { "nombre": "Ana" }
+}
+
+### API-01 / CU-01 — Recuperación de contraseña por email con la plantilla 5
+POST {{api}}/notifications
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "destinatarioId": 10,
+  "plantillaId": 5,
+  "parametros": { "nombre": "Ana", "token": "123456" }
 }
 
 ### API-02 / CU-04 — Consultar el estado de la notificación 1 → 200
