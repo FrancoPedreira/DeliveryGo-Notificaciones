@@ -38,8 +38,11 @@ class UsuariosClientModoTest {
 
     @Nested
     @SpringBootTest
-    @TestPropertySource(properties = { "notificaciones.usuarios.modo=http",
-            "notificaciones.usuarios.base-url=http://127.0.0.1:1" })
+    @TestPropertySource(properties = {
+            "notificaciones.usuarios.modo=http",
+            "notificaciones.usuarios.base-url=http://127.0.0.1:1",
+            "notificaciones.usuarios.api-key=api-key-de-prueba-notificaciones-123"
+    })
     class ModoHttp {
         @Autowired
         private UsuariosClient usuariosClient;
