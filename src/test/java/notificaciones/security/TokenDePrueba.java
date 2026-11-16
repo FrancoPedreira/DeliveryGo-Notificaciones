@@ -23,17 +23,17 @@ public class TokenDePrueba implements MockMvcBuilderCustomizer {
         this.secret = secret;
     }
 
-    public String crear(String usuario, String rol) {
-        return crear(secret, usuario, rol, new Date(System.currentTimeMillis() + 3_600_000));
+    public String crear(Long usuarioId, String rol) {
+        return crear(secret, usuarioId, rol, new Date(System.currentTimeMillis() + 3_600_000));
     }
 
-    public static String crear(String secret, String usuario, String rol, Date vencimiento) {
-        return Jwts.builder().subject(usuario).claim("role", rol).expiration(vencimiento)
+    public static String crear(String secret, Long usuarioId, String rol, Date vencimiento) {
+        return Jwts.builder().subject(usuarioId.toString()).claim("role", rol).expiration(vencimiento)
                 .signWith(Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8))).compact();
     }
 
     @Override
     public void customize(ConfigurableMockMvcBuilder<?> builder) {
-        builder.defaultRequest(get("/").header("Authorization", "Bearer " + crear("admin", "ADMIN")));
+        builder.defaultRequest(get("/").header("Authorization", "Bearer " + crear(1L, "ADMIN")));
     }
 }
