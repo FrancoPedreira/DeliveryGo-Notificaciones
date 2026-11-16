@@ -54,14 +54,19 @@ entorno o argumento (`--notificaciones.max-intentos=5`).
 | `notificaciones.usuarios.modo` | `simulado` | Implementación del cliente de Usuarios (INT-01): `simulado` (usuarios fijos en memoria) o `http` (llama al módulo Usuarios real). |
 | `notificaciones.usuarios.base-url` | `http://localhost:8080` | URL base del módulo Usuarios. Solo se usa con `modo=http`; el valor por defecto es un placeholder. |
 | `notificaciones.usuarios.timeout-ms` | `2000` | Timeout en milisegundos (conexión y lectura) de las llamadas a Usuarios. Solo con `modo=http`. |
+| `notificaciones.usuarios.api-key` | variable `USUARIOS_API_KEY` | Clave de módulo enviada en el header `X-Api-Key`. Solo se requiere con `modo=http`; no guardar la clave real en GitHub. |
 
 ## Seguridad (JWT y CORS)
 
 Todas las APIs requieren el header `Authorization: Bearer <token>` con un JWT.
 
 **Notificaciones no emite tokens ni tiene login**: los emite el módulo Usuarios cuando el usuario inicia sesión.
-Este módulo solo los **valida** (firma y vencimiento) con la misma clave con la que Usuarios los firma, y lee
-dos datos del token: `sub` (el usuario) y `role` (su rol).
+Según el contrato, `sub` contiene el ID numérico del usuario (Long, representado como texto) y `role` contiene
+uno de estos valores sin prefijo: `CLIENTE`, `COMERCIO`, `REPARTIDOR` o `ADMIN`. Notificaciones valida esos
+datos y agrega internamente el prefijo `ROLE_` para Spring Security.
+
+La firma actual es HS256. La variable `JWT_SECRET` debe tener el mismo valor que la clave usada por Usuarios;
+el valor por defecto de desarrollo sirve solo para pruebas locales.
 
 | Ruta | Quién puede |
 |---|---|
@@ -78,15 +83,9 @@ header en cada solicitud) y `SecurityConfig` (reglas por ruta y CORS).
 **CORS:** el Portal Web puede llamar a esta API desde el navegador. Los orígenes permitidos se configuran con
 `notificaciones.cors.origenes-permitidos` (por defecto `http://localhost:5173`).
 
-**Tokens de desarrollo.** Mientras Usuarios no emita los tokens reales, se pueden usar estos, firmados con la
-clave de desarrollo (vencen en 2030). En Swagger UI se cargan con el botón **Authorize**.
-
-- Rol `ADMIN`: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJBRE1JTiIsImV4cCI6MTg5MzQ1NjAwMH0.gOaJcaOHfCedaEnmkyVrUjg81bRnGE4bO6kw4D0gnaA`
-- Rol `CLIENTE`: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbGllbnRlIiwicm9sZSI6IkNMSUVOVEUiLCJleHAiOjE4OTM0NTYwMDB9.ljb7dAe-oEly2-iVwIoOk8huNvOFsNOkm9PQOUUp6Qw`
-
-> **Pendiente de acordar con el equipo de Usuarios:** la clave y el algoritmo de firma (hoy HS256 con clave
-> compartida) y los nombres de los claims (`sub`, `role`). Si usan otros, se ajustan `JwtService` y
-> `JwtAuthFilter`.
+Para probar la API, usá un JWT válido emitido por el módulo Usuarios. En Swagger, pegá el token en
+**Authorize**. El token debe incluir el ID numérico del usuario en `sub` y uno de los roles acordados en
+`role`: `CLIENTE`, `COMERCIO`, `REPARTIDOR` o `ADMIN`. No guardes claves ni tokens reales en el repositorio.
 
 ## Endpoints
 
@@ -119,29 +118,27 @@ El contrato completo (esquemas, ejemplos y códigos de error) está en Swagger y
 
 ### INT-01 — Notificaciones consulta a Usuarios
 
-Para crear una notificación, este módulo consulta los datos de contacto del destinatario
-(`GET /api/v1/users/{id}/contact`, respuesta DTO-04: `id`, `nombre`, `email`, `pushToken`, `activo`).
+Para crear una notificación, Notificaciones consulta el perfil del destinatario mediante
+`GET /api/v1/users/{id}`. La llamada al módulo Usuarios se autentica con `X-Api-Key`; no reenvía el JWT
+del solicitante. Si está presente, propaga el header `X-Correlation-Id`.
 
-> **⚠️ La integración con Usuarios hoy es SIMULADA.** El equipo de Usuarios todavía no publicó su API, así
-> que `UsuariosClientSimulado` devuelve usuarios fijos en memoria (10, 11 y 12). El endpoint y los campos de
-> DTO-04 son una propuesta nuestra y se ajustarán cuando Usuarios publique su contrato. El módulo depende de
-> la interfaz `UsuariosClient`, por lo que reemplazar la implementación no toca la lógica de negocio.
+Usuarios responde `id`, `nombre`, `apellido`, `email`, `telefono`, `rol`, `estado` y `fechaAlta`.
+Notificaciones utiliza `id`, `nombre` y `email`; convierte `estado == "ACTIVO"` en su indicador `activo`.
+El contrato no incluye `pushToken`.
 
-Existe además un cliente HTTP real (`UsuariosClientHttp`, basado en `RestClient`) que se activa con
-`notificaciones.usuarios.modo=http`; por defecto el modo es `simulado`, así que nada cambia hasta que se
-configure. Llama a `GET {base-url}/api/v1/users/{id}/contact`, propaga el `X-Correlation-Id` y el JWT recibido, y tiene un
-timeout configurable (`notificaciones.usuarios.timeout-ms`, 2000 ms por defecto):
+El cliente HTTP (`UsuariosClientHttp`) se activa con `notificaciones.usuarios.modo=http`. Por defecto,
+el modo es `simulado`, con usuarios fijos para las pruebas. Para usar el módulo real hay que configurar
+`USUARIOS_BASE_URL` con la URL y el puerto donde esté levantado Usuarios, y `USUARIOS_API_KEY` con la
+clave del módulo. La clave no debe guardarse en el repositorio.
 
 | Respuesta de Usuarios | Resultado |
 |---|---|
-| `200` | Contacto del usuario |
-| `404` | Usuario inexistente (`422 RECIPIENT_NOT_FOUND` en nuestra API) |
-| Timeout, error de conexión, `5xx` u otra respuesta inesperada | `503 USERS_SERVICE_UNAVAILABLE` |
+| `200` | Se mapea el perfil y se valida que el usuario esté activo. |
+| `404` | Se considera que el destinatario no existe (`422 RECIPIENT_NOT_FOUND` en nuestra API). |
+| Timeout, error de conexión, `5xx` u otra respuesta inesperada | `503 USERS_SERVICE_UNAVAILABLE`. |
 
-Esta implementación solo se probó contra servidores de prueba; no contra el módulo Usuarios real, porque su
-API todavía no está publicada.
-
-Si Usuarios no responde, la API devuelve `503` con código `USERS_SERVICE_UNAVAILABLE` y no se registra nada.
+El cliente HTTP tiene pruebas con respuestas simuladas; todavía falta verificarlo contra una instancia real
+de Usuarios.
 
 ### INT-02 — Los demás módulos llaman a Notificaciones
 
@@ -162,6 +159,8 @@ El `DataLoader` carga al arrancar (los ids son los que asigna la base, en este o
 | 1 | `PEDIDO_CONFIRMADO_EMAIL` | EMAIL | `{nombre}`, `{pedidoId}` |
 | 2 | `PAGO_APROBADO_PUSH` | PUSH | `{monto}` |
 | 3 | `ENVIO_EN_CAMINO_IN_APP` | IN_APP | `{codigo}` |
+| 4 | `USUARIO_BIENVENIDA_EMAIL` | EMAIL | `{nombre}` |
+| 5 | `RECUPERACION_PASSWORD_EMAIL` | EMAIL | `{nombre}`, `{token}` |
 
 **Usuarios simulados** (`UsuariosClientSimulado`)
 
@@ -170,6 +169,7 @@ El `DataLoader` carga al arrancar (los ids son los que asigna la base, en este o
 | 10 | Ana | `ana@mail.com` | `push-token-ana` | sí |
 | 11 | Bruno | `bruno@mail.com` | — (no tiene) | sí |
 | 12 | Carla | `carla@mail.com` | `push-token-carla` | **no** |
+
 
 Casos útiles: el usuario 11 con la plantilla 2 (PUSH) da `422 RECIPIENT_CONTACT_MISSING`; el usuario 12 (inactivo) y
 cualquier otro id dan `422 RECIPIENT_NOT_FOUND`.
@@ -210,8 +210,8 @@ iniciada; para que los resultados sean deterministas conviene arrancar con
 
 1. Arrancar sin fallos simulados, para que los resultados sean siempre los mismos:
    `./mvnw spring-boot:run "-Dspring-boot.run.arguments=--notificaciones.emisor.tasa-fallo=0"`
-2. Abrir Swagger (http://localhost:8089/swagger-ui.html), tocar **Authorize** y pegar el token `ADMIN` de la
-   sección [Seguridad](#seguridad-jwt-y-cors).
+2. Abrir Swagger (http://localhost:8089/swagger-ui.html), tocar **Authorize** y pegar un JWT válido de
+   Usuarios con rol `ADMIN`.
 3. **Caso principal:** crear una notificación (API-01), consultar su estado (API-02) y sus intentos (API-11).
 4. **Historial y bandeja interna:** crear una IN_APP (plantilla 3), marcarla como leída (API-12) y ver el
    historial del usuario 10 (API-04).
@@ -244,16 +244,15 @@ Los tests de controllers envían automáticamente un token con rol `ADMIN` (`Tok
 
 ## Limitaciones conocidas y pendientes
 
-- **El historial no está restringido por usuario**: cualquier token válido puede consultar el historial de
-  cualquier usuario. Restringirlo al propio usuario depende de qué dato trae el claim `sub` (id o username),
-  que hay que acordar con el equipo de Usuarios.
+- **El historial no está restringido por usuario:** cualquier token válido puede consultar el historial de
+  cualquier usuario. El contrato ya define `sub` como ID numérico; queda pendiente aplicar o acordar esa
+  restricción en este módulo.
 - **Usuarios es simulado por defecto** (ver [INT-01](#int-01--notificaciones-consulta-a-usuarios)). El cliente HTTP real existe pero está sin probar contra el módulo real.
 - **El envío por EMAIL y PUSH es simulado**: no se manda ningún mail ni push real; solo se registra el intento
   y falla ~30 % de las veces a propósito.
 - **H2 en memoria**: los datos (incluidas las notificaciones) se pierden al reiniciar la aplicación.
-- **JWT sin integrar con Usuarios**: la validación está implementada, pero la clave y los claims todavía
-  no se acordaron con el equipo de Usuarios; por ahora se prueba con tokens de desarrollo (ver
-  [Seguridad](#seguridad-jwt-y-cors)).
+- **Configuración JWT:** el código ya sigue los claims acordados. Para validar tokens reales, `JWT_SECRET`
+  debe coincidir con la clave de Usuarios.
 - **Pendiente de decisión del equipo**: renombrar paquetes y clases (`services` → `service`,
   `NotificacionServices` → ...).
 - **Pendiente de acordar con los otros equipos**: las fechas son `LocalDateTime` sin zona horaria; pasar a un
