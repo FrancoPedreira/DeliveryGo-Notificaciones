@@ -29,6 +29,23 @@ public class UsuarioContactoResponseDto {
         this.activo = "ACTIVO".equals(estado);
     }
 
+    // Setters para deserializar la respuesta JSON
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public void setPushToken(String pushToken) {
+        this.pushToken = pushToken;
+    }
+
     // Getters
     public Long getId() {
         return id;
