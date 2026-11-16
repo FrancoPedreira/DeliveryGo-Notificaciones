@@ -2,6 +2,7 @@ package notificaciones.security;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -16,11 +17,11 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-// Lee el header "Authorization: Bearer <token>". Si el token es válido deja al usuario autenticado, con su rol,
-// en el contexto de Spring Security. Si falta o es inválido no hace nada: SecurityConfig responde 401
+// Lee el header "Authorization: Bearer <token>" y valida el JWT emitido por Usuarios.
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
     private static final String PREFIJO = "Bearer ";
+    private static final Set<String> ROLES_VALIDOS = Set.of("CLIENTE", "COMERCIO", "REPARTIDOR", "ADMIN");
 
     private final JwtService jwtService;
 
@@ -36,13 +37,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String token = header.substring(PREFIJO.length());
             try {
                 Claims claims = jwtService.validar(token);
-                // Spring Security espera los roles con el prefijo ROLE_ (hasRole("ADMIN") busca ROLE_ADMIN)
-                String rol = "ROLE_" + claims.get("role", String.class);
-                // El token queda como credencial para poder reenviarlo al llamar a Usuarios (INT-01)
+
+                // En el contrato de Usuarios, "sub" contiene el id numérico del usuario.
+                Object subject = claims.get(Claims.SUBJECT);
+                if (subject == null) {
+                    throw new IllegalArgumentException("El token no contiene el id del usuario");
+                }
+                Long usuarioId = Long.valueOf(subject.toString());
+
+                // El token trae el rol sin ROLE_; Spring Security necesita ese prefijo internamente.
+                String rol = claims.get("role", String.class);
+                if (rol == null || !ROLES_VALIDOS.contains(rol)) {
+                    throw new IllegalArgumentException("El token contiene un rol inválido");
+                }
+
+                String autoridad = "ROLE_" + rol;
                 SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                        claims.getSubject(), token, List.of(new SimpleGrantedAuthority(rol))));
+                        usuarioId, token, List.of(new SimpleGrantedAuthority(autoridad))));
             } catch (JwtException | IllegalArgumentException e) {
-                // Firma inválida, token vencido o mal formado: la solicitud sigue sin autenticar
+                // Firma inválida, token vencido, id no numérico o rol inválido: queda sin autenticar.
                 SecurityContextHolder.clearContext();
             }
         }
