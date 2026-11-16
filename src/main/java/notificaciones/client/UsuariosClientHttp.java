@@ -12,8 +12,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -22,9 +20,9 @@ import notificaciones.config.CorrelationIdFilter;
 import notificaciones.dto.UsuarioContactoResponseDto;
 import notificaciones.exception.ServicioNoDisponibleException;
 
-// INT-01 real: llama a GET {base-url}/api/v1/users/{id}/contact del módulo Usuarios. Se activa con
-// notificaciones.usuarios.modo=http (por defecto se usa UsuariosClientSimulado).
-// 200 -> contacto, 404 -> vacío; timeout, error de conexión, 5xx o cualquier otra respuesta -> 503
+// INT-01 real: consulta el perfil del destinatario mediante GET {base-url}/api/v1/users/{id}.
+// Se activa con notificaciones.usuarios.modo=http (por defecto se usa UsuariosClientSimulado).
+// 200 -> datos del usuario; 404 -> vacío; timeout, error de conexión, 5xx o cualquier otra respuesta -> 503
 @Component
 @ConditionalOnProperty(name = "notificaciones.usuarios.modo", havingValue = "http")
 public class UsuariosClientHttp implements UsuariosClient {
@@ -33,16 +31,24 @@ public class UsuariosClientHttp implements UsuariosClient {
     private static final String MENSAJE_NO_DISPONIBLE = "El módulo Usuarios no está disponible";
 
     private final RestClient restClient;
+    private final String apiKey;
 
     @Autowired
-    public UsuariosClientHttp(@Value("${notificaciones.usuarios.base-url}") String baseUrl,
-            @Value("${notificaciones.usuarios.timeout-ms:2000}") long timeoutMs) {
-        this(construirRestClient(RestClient.builder(), baseUrl, timeoutMs));
+    public UsuariosClientHttp(
+            @Value("${notificaciones.usuarios.base-url}") String baseUrl,
+            @Value("${notificaciones.usuarios.timeout-ms:2000}") long timeoutMs,
+            @Value("${notificaciones.usuarios.api-key}") String apiKey) {
+        this(construirRestClient(RestClient.builder(), baseUrl, timeoutMs), apiKey);
     }
 
     // Permite inyectar un RestClient ya armado (los tests lo enlazan a un MockRestServiceServer)
     UsuariosClientHttp(RestClient restClient) {
+        this(restClient, "");
+    }
+
+    UsuariosClientHttp(RestClient restClient, String apiKey) {
         this.restClient = restClient;
+        this.apiKey = apiKey;
     }
 
     // Mismo timeout para conectar y para esperar la respuesta
@@ -58,18 +64,15 @@ public class UsuariosClientHttp implements UsuariosClient {
     public Optional<UsuarioContactoResponseDto> obtenerContacto(Long usuarioId) {
         try {
             return restClient.get()
-                    .uri("/api/v1/users/{id}/contact", usuarioId)
+                    .uri("/api/v1/users/{id}", usuarioId)
                     .headers(headers -> {
                         // Propaga el id de la solicitud entrante (lo deja CorrelationIdFilter en el MDC)
                         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
                         if (correlationId != null) {
                             headers.set(CorrelationIdFilter.HEADER, correlationId);
                         }
-                        // Reenvía el JWT de la solicitud entrante (lo deja JwtAuthFilter como credencial)
-                        Authentication autenticacion = SecurityContextHolder.getContext().getAuthentication();
-                        if (autenticacion != null && autenticacion.getCredentials() instanceof String token) {
-                            headers.setBearerAuth(token);
-                        }
+                        // Autentica la consulta al módulo Usuarios con la clave de API de Notificaciones
+                        headers.set("X-Api-Key", apiKey);
                     })
                     .exchange((request, response) -> {
                         HttpStatus status = HttpStatus.resolve(response.getStatusCode().value());
