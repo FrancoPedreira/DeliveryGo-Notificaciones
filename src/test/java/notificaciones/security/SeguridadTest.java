@@ -61,8 +61,11 @@ class SeguridadTest {
 
     @Test
     void tokenConFirmaInvalidaDevuelve401() throws Exception {
-        String firmadoConOtraClave = TokenDePrueba.crear("otra-clave-distinta-de-al-menos-32-caracteres", "ana",
-                "ADMIN", new Date(System.currentTimeMillis() + 60_000));
+        String firmadoConOtraClave = TokenDePrueba.crear(
+                "otra-clave-distinta-de-al-menos-32-caracteres",
+                10L,
+                "ADMIN",
+                new Date(System.currentTimeMillis() + 60_000));
 
         mockMvc.perform(get(CANALES).header("Authorization", bearer(firmadoConOtraClave)))
                 .andExpect(status().isUnauthorized());
@@ -70,7 +73,11 @@ class SeguridadTest {
 
     @Test
     void tokenVencidoDevuelve401() throws Exception {
-        String vencido = TokenDePrueba.crear(secret, "ana", "ADMIN", new Date(System.currentTimeMillis() - 60_000));
+        String vencido = TokenDePrueba.crear(
+                secret,
+                10L,
+                "ADMIN",
+                new Date(System.currentTimeMillis() - 60_000));
 
         mockMvc.perform(get(CANALES).header("Authorization", bearer(vencido)))
                 .andExpect(status().isUnauthorized());
@@ -84,22 +91,26 @@ class SeguridadTest {
 
     @Test
     void tokenValidoDeCualquierRolPuedeConsultar() throws Exception {
-        mockMvc.perform(get(CANALES).header("Authorization", bearer(tokens.crear("ana", "CLIENTE"))))
+        mockMvc.perform(get(CANALES).header("Authorization", bearer(tokens.crear(10L, "CLIENTE"))))
                 .andExpect(status().isOk());
     }
 
     @Test
     void administrarCanalesSinRolAdminDevuelve403() throws Exception {
-        mockMvc.perform(patch(CANALES + "/PUSH").header("Authorization", bearer(tokens.crear("ana", "CLIENTE")))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"activo\":true}"))
+        mockMvc.perform(patch(CANALES + "/PUSH")
+                .header("Authorization", bearer(tokens.crear(10L, "CLIENTE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activo\":true}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
 
     @Test
     void administrarCanalesConRolAdminFunciona() throws Exception {
-        mockMvc.perform(patch(CANALES + "/PUSH").header("Authorization", bearer(tokens.crear("admin", "ADMIN")))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"activo\":true}"))
+        mockMvc.perform(patch(CANALES + "/PUSH")
+                .header("Authorization", bearer(tokens.crear(1L, "ADMIN")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activo\":true}"))
                 .andExpect(status().isOk());
     }
 
