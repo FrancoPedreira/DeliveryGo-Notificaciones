@@ -33,5 +33,10 @@ public class DataLoader implements CommandLineRunner {
                 "Tu pago de {monto} fue aprobado.", true, "PUSH"));
         plantillaServices.crearPlantilla(new PlantillaRequestDto("ENVIO_EN_CAMINO_IN_APP", "Envío en camino",
                 "Tu envío {codigo} está en camino.", true, "IN_APP"));
+
+        plantillaServices.crearPlantilla(new PlantillaRequestDto("USUARIO_BIENVENIDA_EMAIL",
+                "Bienvenido a DeliveryGo", "Hola {nombre}, bienvenido a DeliveryGo.", true, "EMAIL"));
+        plantillaServices.crearPlantilla(new PlantillaRequestDto("RECUPERACION_PASSWORD_EMAIL",
+                "Recuperar contraseña", "Hola {nombre}, tu código de recuperación es {token}.", true, "EMAIL"));
     }
 }
