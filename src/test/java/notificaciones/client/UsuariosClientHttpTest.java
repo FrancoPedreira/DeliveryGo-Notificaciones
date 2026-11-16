@@ -2,6 +2,7 @@ package notificaciones.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
@@ -35,14 +36,24 @@ import notificaciones.exception.ServicioNoDisponibleException;
 // INT-01 real: mapeo de respuestas del cliente HTTP hacia Usuarios (200, 404, 5xx, timeout)
 class UsuariosClientHttpTest {
     private static final String BASE_URL = "http://usuarios.test";
-    private static final String URL_CONTACTO_10 = BASE_URL + "/api/v1/users/10/contact";
+    private static final String API_KEY = "api-key-de-prueba-notificaciones-123";
+    private static final String URL_USUARIO_10 = BASE_URL + "/api/v1/users/10";
     private static final String CONTACTO_JSON = """
-            {"id":10,"nombre":"Ana","email":"ana@mail.com","pushToken":"push-token-ana","activo":true,
-             "campoNuevoQueNoConocemos":"x"}""";
+            {
+              "id": 10,
+              "nombre": "Ana",
+              "apellido": "Pérez",
+              "email": "ana@mail.com",
+              "telefono": null,
+              "rol": "CLIENTE",
+              "estado": "ACTIVO",
+              "fechaAlta": "2026-10-30T15:00:00Z"
+            }""";
 
     private final RestClient.Builder builder = RestClient.builder();
     private final MockRestServiceServer servidor = MockRestServiceServer.bindTo(builder).build();
-    private final UsuariosClientHttp cliente = new UsuariosClientHttp(builder.baseUrl(BASE_URL).build());
+    private final UsuariosClientHttp cliente =
+            new UsuariosClientHttp(builder.baseUrl(BASE_URL).build(), API_KEY);
 
     @AfterEach
     void limpiarMdc() {
@@ -50,9 +61,11 @@ class UsuariosClientHttpTest {
     }
 
     @Test
-    void respuesta200DevuelveElContactoIgnorandoCamposDesconocidos() {
-        servidor.expect(requestTo(URL_CONTACTO_10))
+    void respuesta200DevuelveElPerfilYMapeaElEstado() {
+        servidor.expect(requestTo(URL_USUARIO_10))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-Api-Key", API_KEY))
+                .andExpect(headerDoesNotExist("Authorization"))
                 .andRespond(withSuccess(CONTACTO_JSON, MediaType.APPLICATION_JSON));
 
         Optional<UsuarioContactoResponseDto> contacto = cliente.obtenerContacto(10L);
@@ -61,14 +74,16 @@ class UsuariosClientHttpTest {
         assertEquals(10L, contacto.get().getId());
         assertEquals("Ana", contacto.get().getNombre());
         assertEquals("ana@mail.com", contacto.get().getEmail());
-        assertEquals("push-token-ana", contacto.get().getPushToken());
         assertTrue(contacto.get().isActivo());
+        assertNull(contacto.get().getPushToken());
         servidor.verify();
     }
 
     @Test
     void respuesta404DevuelveVacio() {
-        servidor.expect(requestTo(BASE_URL + "/api/v1/users/99/contact")).andRespond(withResourceNotFound());
+        servidor.expect(requestTo(BASE_URL + "/api/v1/users/99"))
+                .andExpect(header("X-Api-Key", API_KEY))
+                .andRespond(withResourceNotFound());
 
         assertFalse(cliente.obtenerContacto(99L).isPresent());
         servidor.verify();
@@ -76,7 +91,7 @@ class UsuariosClientHttpTest {
 
     @Test
     void respuesta500LanzaServicioNoDisponible() {
-        servidor.expect(requestTo(URL_CONTACTO_10)).andRespond(withServerError());
+        servidor.expect(requestTo(URL_USUARIO_10)).andRespond(withServerError());
 
         ServicioNoDisponibleException e = assertThrows(ServicioNoDisponibleException.class,
                 () -> cliente.obtenerContacto(10L));
@@ -85,14 +100,15 @@ class UsuariosClientHttpTest {
 
     @Test
     void otroEstadoInesperadoTambienLanzaServicioNoDisponible() {
-        servidor.expect(requestTo(URL_CONTACTO_10)).andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+        servidor.expect(requestTo(URL_USUARIO_10))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
         assertThrows(ServicioNoDisponibleException.class, () -> cliente.obtenerContacto(10L));
     }
 
     @Test
     void errorDeLecturaLanzaServicioNoDisponible() {
-        servidor.expect(requestTo(URL_CONTACTO_10)).andRespond(request -> {
+        servidor.expect(requestTo(URL_USUARIO_10)).andRespond(request -> {
             throw new SocketTimeoutException("read timed out");
         });
 
@@ -103,7 +119,7 @@ class UsuariosClientHttpTest {
 
     @Test
     void cuerpoIlegibleLanzaServicioNoDisponible() {
-        servidor.expect(requestTo(URL_CONTACTO_10))
+        servidor.expect(requestTo(URL_USUARIO_10))
                 .andRespond(withSuccess("esto no es json", MediaType.APPLICATION_JSON));
 
         assertThrows(ServicioNoDisponibleException.class, () -> cliente.obtenerContacto(10L));
@@ -112,8 +128,9 @@ class UsuariosClientHttpTest {
     @Test
     void propagaElCorrelationIdDeLaSolicitudEntrante() {
         MDC.put("correlationId", "pedido-123");
-        servidor.expect(requestTo(URL_CONTACTO_10))
+        servidor.expect(requestTo(URL_USUARIO_10))
                 .andExpect(header("X-Correlation-Id", "pedido-123"))
+                .andExpect(header("X-Api-Key", API_KEY))
                 .andRespond(withSuccess(CONTACTO_JSON, MediaType.APPLICATION_JSON));
 
         cliente.obtenerContacto(10L);
@@ -122,8 +139,9 @@ class UsuariosClientHttpTest {
 
     @Test
     void sinCorrelationIdNoEnviaElHeader() {
-        servidor.expect(requestTo(URL_CONTACTO_10))
+        servidor.expect(requestTo(URL_USUARIO_10))
                 .andExpect(headerDoesNotExist("X-Correlation-Id"))
+                .andExpect(header("X-Api-Key", API_KEY))
                 .andRespond(withSuccess(CONTACTO_JSON, MediaType.APPLICATION_JSON));
 
         cliente.obtenerContacto(10L);
@@ -147,7 +165,7 @@ class UsuariosClientHttpTest {
         lento.start();
         try {
             UsuariosClientHttp conTimeoutCorto = new UsuariosClientHttp(
-                    "http://127.0.0.1:" + lento.getAddress().getPort(), 200);
+                    "http://127.0.0.1:" + lento.getAddress().getPort(), 200, API_KEY);
 
             long inicio = System.nanoTime();
             assertThrows(ServicioNoDisponibleException.class, () -> conTimeoutCorto.obtenerContacto(10L));
@@ -162,7 +180,7 @@ class UsuariosClientHttpTest {
     @Test
     void conexionRechazadaLanzaServicioNoDisponible() {
         // Puerto 1: nadie escucha
-        UsuariosClientHttp sinServidor = new UsuariosClientHttp("http://127.0.0.1:1", 500);
+        UsuariosClientHttp sinServidor = new UsuariosClientHttp("http://127.0.0.1:1", 500, API_KEY);
 
         assertThrows(ServicioNoDisponibleException.class, () -> sinServidor.obtenerContacto(10L));
     }
