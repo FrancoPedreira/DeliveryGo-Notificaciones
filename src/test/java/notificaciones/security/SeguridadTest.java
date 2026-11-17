@@ -120,6 +120,11 @@ class SeguridadTest {
         mockMvc.perform(get("/v3/api-docs.yaml")).andExpect(status().isOk());
     }
 
+    @Test
+    void statusEsPublicoYDevuelve200() throws Exception {
+        mockMvc.perform(get("/status")).andExpect(status().isOk());
+    }
+
     // CORS: el navegador pregunta con OPTIONS (preflight, sin token) antes de la llamada real
     @Test
     void preflightDesdeElPortalEstaPermitido() throws Exception {
