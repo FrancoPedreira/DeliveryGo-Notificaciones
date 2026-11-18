@@ -23,8 +23,10 @@ public class CanalServices {
         this.canalRepository = canalRepository;
     }
 
-    // Único lugar que convierte el texto recibido ("email", "PUSH"...) en un canal de la base.
-    // Vacío si el texto no es un TipoCanal o el canal no está cargado; cada caso de uso decide qué error devolver
+    // Único lugar que convierte el texto recibido ("email", "PUSH"...) en un canal
+    // de la base.
+    // Vacío si el texto no es un TipoCanal o el canal no está cargado; cada caso de
+    // uso decide qué error devolver
     private Optional<Canal> buscarCanal(String nombreCanal) {
         if (nombreCanal == null) {
             return Optional.empty();
@@ -46,8 +48,10 @@ public class CanalServices {
         return canalRepository.findAll().stream().map(this::toDto).toList();
     }
 
-    // SRV-08 (CU-08, RN-07): habilitar o deshabilitar un canal sin tocar código. Idempotente.
-    // Las notificaciones ya registradas no cambian: si el canal está inactivo al enviarlas, el intento falla (CU-03 A3)
+    // SRV-08 (CU-08, RN-07): habilitar o deshabilitar un canal sin tocar código.
+    // Idempotente.
+    // Las notificaciones ya registradas no cambian: si el canal está inactivo al
+    // enviarlas, el intento falla (CU-03 A3)
     @Transactional
     public CanalDto cambiarEstadoCanal(String tipoCanal, Boolean activo) {
         validateRequiredText(tipoCanal, "tipo");
@@ -72,7 +76,8 @@ public class CanalServices {
                 .orElseThrow(() -> new ValidacionException("El canal " + nombreCanal + " no existe."));
     }
 
-    // RN-07 (REP-06), CU-01 A2: el canal solicitado debe existir y estar activo → si no, 422
+    // RN-07 (REP-06), CU-01 A2: el canal solicitado debe existir y estar activo →
+    // si no, 422
     @Transactional(readOnly = true)
     public Canal obtenerCanalActivo(String nombreCanal) {
         return buscarCanal(nombreCanal)
