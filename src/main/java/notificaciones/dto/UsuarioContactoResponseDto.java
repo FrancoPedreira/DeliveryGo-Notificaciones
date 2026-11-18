@@ -1,5 +1,6 @@
 package notificaciones.dto;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 // DTO-04: datos de contacto que Notificaciones necesita para INT-01.
@@ -12,7 +13,9 @@ public class UsuarioContactoResponseDto {
     private String pushToken;
     private boolean activo;
 
-    // Necesario para deserializar la respuesta de Usuarios
+    // Necesario para deserializar la respuesta de Usuarios. @JsonCreator evita que Jackson 3 elija el
+    // constructor de 5 parámetros: Usuarios no envía "activo" y fallaría al mapear null en un boolean.
+    @JsonCreator
     public UsuarioContactoResponseDto() {
     }
 

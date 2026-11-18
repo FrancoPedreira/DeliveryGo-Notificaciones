@@ -36,6 +36,10 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/v3/api-docs.yaml",
                                 "/h2-console/**", "/status")
                         .permitAll()
+                        // Llamadas de otros módulos sin credencial (acuerdo del ecosistema). Usuarios busca la
+                        // plantilla por nombre y pide la bienvenida o la recuperación de contraseña
+                        .requestMatchers(HttpMethod.GET, "/api/v1/templates").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/notifications").permitAll()
                         // Solo ADMIN administra plantillas y canales (CU-07 y CU-08)
                         .requestMatchers(HttpMethod.POST, "/api/v1/templates/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/templates/**").hasRole("ADMIN")

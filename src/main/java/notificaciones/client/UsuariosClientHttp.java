@@ -71,8 +71,11 @@ public class UsuariosClientHttp implements UsuariosClient {
                         if (correlationId != null) {
                             headers.set(CorrelationIdFilter.HEADER, correlationId);
                         }
-                        // Autentica la consulta al módulo Usuarios con la clave de API de Notificaciones
-                        headers.set("X-Api-Key", apiKey);
+                        // Usuarios hoy no pide credencial para lecturas entre módulos (ignora la clave). Se envía
+                        // solo si está configurada, por si el acuerdo vuelve a exigirla
+                        if (apiKey != null && !apiKey.isBlank()) {
+                            headers.set("X-Api-Key", apiKey);
+                        }
                     })
                     .exchange((request, response) -> {
                         HttpStatus status = HttpStatus.resolve(response.getStatusCode().value());

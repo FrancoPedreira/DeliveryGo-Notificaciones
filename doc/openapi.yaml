@@ -28,7 +28,7 @@ info:
 
     Todos los errores devuelven el mismo formato (ErrorResponseDto). Todas las respuestas devuelven el header X-Correlation-Id: el que envió el llamador o uno generado.
 
-    **Seguridad:** todas las APIs requieren Authorization: Bearer <JWT> (botón Authorize). El token lo emite Usuarios; este módulo solo lo valida. El contrato define sub como el ID numérico del usuario y role como CLIENTE, COMERCIO, REPARTIDOR o ADMIN, sin el prefijo ROLE_. Crear o modificar plantillas y habilitar o deshabilitar canales requiere el rol ADMIN.
+    **Seguridad:** las APIs requieren Authorization: Bearer <JWT> (botón Authorize), salvo GET /api/v1/templates y POST /api/v1/notifications, que otros módulos llaman sin credencial por acuerdo del ecosistema. El token lo emite Usuarios; este módulo solo lo valida. El contrato define sub como el ID numérico del usuario y role como CLIENTE, COMERCIO, REPARTIDOR, ADMIN o SISTEMA (token de servicio de Usuarios), sin el prefijo ROLE_. Crear o modificar plantillas y habilitar o deshabilitar canales requiere el rol ADMIN.
   version: "1.0"
 
 servers:

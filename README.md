@@ -58,19 +58,25 @@ entorno o argumento (`--notificaciones.max-intentos=5`).
 
 ## Seguridad (JWT y CORS)
 
-Todas las APIs requieren el header `Authorization: Bearer <token>` con un JWT.
+Las APIs requieren el header `Authorization: Bearer <token>` con un JWT, salvo las dos que los otros módulos
+llaman sin credencial (ver la tabla de abajo). Por acuerdo del ecosistema, entre módulos no se usa JWT ni clave:
+Usuarios llama a `GET /api/v1/templates` y `POST /api/v1/notifications` solo con `X-Correlation-Id`.
 
 **Notificaciones no emite tokens ni tiene login**: los emite el módulo Usuarios cuando el usuario inicia sesión.
 Según el contrato, `sub` contiene el ID numérico del usuario (Long, representado como texto) y `role` contiene
-uno de estos valores sin prefijo: `CLIENTE`, `COMERCIO`, `REPARTIDOR` o `ADMIN`. Notificaciones valida esos
-datos y agrega internamente el prefijo `ROLE_` para Spring Security.
+uno de estos valores sin prefijo: `CLIENTE`, `COMERCIO`, `REPARTIDOR`, `ADMIN` o `SISTEMA`. Notificaciones valida
+esos datos y agrega internamente el prefijo `ROLE_` para Spring Security.
+
+`SISTEMA` es el rol de un token de servicio, sin un usuario logueado. Puede usar las APIs que aceptan cualquier
+token válido, pero no las que requieren `ADMIN`.
 
 La firma actual es HS256. La variable `JWT_SECRET` debe tener el mismo valor que la clave usada por Usuarios;
 el valor por defecto de desarrollo sirve solo para pruebas locales.
 
 | Ruta | Quién puede |
 |---|---|
-| `/swagger-ui.html`, `/v3/api-docs`, `/h2-console` | Público |
+| `/status`, `/swagger-ui.html`, `/v3/api-docs`, `/h2-console` | Público |
+| `GET /api/v1/templates` (listar), `POST /api/v1/notifications` (crear) | Público: lo llaman otros módulos sin credencial |
 | `POST` / `PUT /api/v1/templates`, `PATCH /api/v1/channels/{tipo}` | Solo rol `ADMIN` |
 | El resto de las APIs | Cualquier token válido |
 
@@ -85,7 +91,7 @@ header en cada solicitud) y `SecurityConfig` (reglas por ruta y CORS).
 
 Para probar la API, usá un JWT válido emitido por el módulo Usuarios. En Swagger, pegá el token en
 **Authorize**. El token debe incluir el ID numérico del usuario en `sub` y uno de los roles acordados en
-`role`: `CLIENTE`, `COMERCIO`, `REPARTIDOR` o `ADMIN`. No guardes claves ni tokens reales en el repositorio.
+`role`: `CLIENTE`, `COMERCIO`, `REPARTIDOR`, `ADMIN` o `SISTEMA`. No guardes claves ni tokens reales en el repositorio.
 
 ## Endpoints
 

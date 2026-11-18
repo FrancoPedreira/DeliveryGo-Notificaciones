@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -93,6 +94,52 @@ class SeguridadTest {
     void tokenValidoDeCualquierRolPuedeConsultar() throws Exception {
         mockMvc.perform(get(CANALES).header("Authorization", bearer(tokens.crear(10L, "CLIENTE"))))
                 .andExpect(status().isOk());
+    }
+
+    // Usuarios nos llama sin credencial: busca la plantilla por nombre y pide la bienvenida
+    @Test
+    void otrosModulosListanPlantillasSinToken() throws Exception {
+        mockMvc.perform(get("/api/v1/templates"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void otrosModulosCreanNotificacionesSinToken() throws Exception {
+        mockMvc.perform(post("/api/v1/notifications")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"destinatarioId\":10,\"plantillaId\":4,\"parametros\":{\"nombre\":\"Ana\"}}"))
+                .andExpect(status().isCreated());
+    }
+
+    // Lo que no se abrió a otros módulos sigue pidiendo token
+    @Test
+    void elRestoDeLasConsultasSigueRequiriendoToken() throws Exception {
+        mockMvc.perform(get("/api/v1/templates/1")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/users/10/notifications")).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/v1/templates").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // Token de servicio de Usuarios (bienvenida y recuperación de contraseña, sin usuario logueado)
+    @Test
+    void tokenDeServicioConRolSistemaEsAceptado() throws Exception {
+        mockMvc.perform(get(CANALES).header("Authorization", bearer(tokens.crear(0L, "SISTEMA"))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void rolSistemaNoPuedeAdministrarCanales() throws Exception {
+        mockMvc.perform(patch(CANALES + "/PUSH")
+                .header("Authorization", bearer(tokens.crear(0L, "SISTEMA")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activo\":true}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void rolDesconocidoDevuelve401() throws Exception {
+        mockMvc.perform(get(CANALES).header("Authorization", bearer(tokens.crear(10L, "OTRO"))))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
