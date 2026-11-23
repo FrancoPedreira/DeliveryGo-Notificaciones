@@ -250,3 +250,11 @@ Authorization: Bearer {{tokenCliente}}
 Content-Type: application/json
 
 { "activo": false }
+
+### 403 FORBIDDEN — un CLIENTE solo ve su propio historial. Con un @tokenCliente cuyo sub no sea 10
+GET {{api}}/users/10/notifications
+Authorization: Bearer {{tokenCliente}}
+
+### 403 FORBIDDEN — ni la notificación de otra persona (la 1 es del usuario 10)
+GET {{api}}/notifications/1
+Authorization: Bearer {{tokenCliente}}

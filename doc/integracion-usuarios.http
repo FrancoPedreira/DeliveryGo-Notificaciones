@@ -1,0 +1,92 @@
+### =====================================================================
+### Demo de integración real Usuarios <-> Notificaciones
+### Para REST Client de VS Code (usa variables de respuesta: {{nombre.response.body.$.campo}}).
+###
+### Antes: levantar los dos módulos como indica doc/INTEGRACION.md
+###   Usuarios en http://localhost:8080 (NOTIFICACIONES_MODO=http, ADMIN_EMAIL / ADMIN_PASSWORD)
+###   Notificaciones en http://localhost:8089 (NOTIFICACIONES_USUARIOS_MODO=http)
+###   con el mismo JWT_SECRET en los dos.
+### Ejecutar en orden. Si los registros dan 409 (email ya usado), reiniciar Usuarios: su base es H2 en memoria.
+### =====================================================================
+
+@usuarios = http://localhost:8080/api/v1
+@notificaciones = http://localhost:8089/api/v1
+
+### 0. Notificaciones informa que INT-01 es real → "integracionUsuarios": "http"
+GET http://localhost:8089/status
+
+
+### 1. Registro de Ana en Usuarios → 201. Usuarios pide la bienvenida a Notificaciones
+###    Buscar "demo-registro-ana" en los logs de los dos módulos
+# @name registroAna
+POST {{usuarios}}/auth/register
+Content-Type: application/json
+X-Correlation-Id: demo-registro-ana
+
+{ "nombre": "Ana", "apellido": "Demo", "email": "ana@deliverygo.test", "telefono": "1155554444", "password": "Clave2026!segura" }
+
+### 2. Registro de Beto → 201
+# @name registroBeto
+POST {{usuarios}}/auth/register
+Content-Type: application/json
+
+{ "nombre": "Beto", "apellido": "Demo", "email": "beto@deliverygo.test", "telefono": "1155554444", "password": "Clave2026!segura" }
+
+### 3. Login de Ana en Usuarios: el JWT que devuelve sirve en Notificaciones
+# @name loginAna
+POST {{usuarios}}/auth/login
+Content-Type: application/json
+
+{ "email": "ana@deliverygo.test", "password": "Clave2026!segura" }
+
+###
+@ana = {{registroAna.response.body.$.id}}
+@beto = {{registroBeto.response.body.$.id}}
+@tokenAna = {{loginAna.response.body.$.token}}
+
+### 4. CU-06: Ana ve su historial → 200, la bienvenida ENVIADA por EMAIL
+# @name historialAna
+GET {{notificaciones}}/users/{{ana}}/notifications
+Authorization: Bearer {{tokenAna}}
+
+### 5. CU-04 y CU-09: estado e intentos de su notificación → 200
+GET {{notificaciones}}/notifications/{{historialAna.response.body.$.content[0].id}}
+Authorization: Bearer {{tokenAna}}
+
+###
+GET {{notificaciones}}/notifications/{{historialAna.response.body.$.content[0].id}}/attempts
+Authorization: Bearer {{tokenAna}}
+
+### 6. Beto pide recuperar su contraseña → 202. Usuarios pide la notificación con el código
+POST {{usuarios}}/auth/password/forgot
+Content-Type: application/json
+X-Correlation-Id: demo-recuperacion-beto
+
+{ "email": "beto@deliverygo.test" }
+
+### 7. Ana intenta leer el historial de Beto → 403 FORBIDDEN (no puede ver su código de recuperación)
+GET {{notificaciones}}/users/{{beto}}/notifications
+Authorization: Bearer {{tokenAna}}
+
+### 8. Login del ADMIN de Usuarios
+# @name loginAdmin
+POST {{usuarios}}/auth/login
+Content-Type: application/json
+
+{ "email": "admin@deliverygo.test", "password": "AdminDemo2026!" }
+
+### 9. ADMIN ve el historial de Beto → 200 (bienvenida y recuperación)
+GET {{notificaciones}}/users/{{beto}}/notifications
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### 10. Destinatario que no existe en Usuarios → 422 RECIPIENT_NOT_FOUND (Usuarios respondió 404)
+POST {{notificaciones}}/notifications
+Content-Type: application/json
+
+{ "destinatarioId": 999999, "plantillaId": 4, "parametros": { "nombre": "Nadie" } }
+
+### 11. Apagar Usuarios y repetir → 503 USERS_SERVICE_UNAVAILABLE (prueba que la llamada es real)
+POST {{notificaciones}}/notifications
+Content-Type: application/json
+
+{ "destinatarioId": {{ana}}, "plantillaId": 4, "parametros": { "nombre": "Ana" } }

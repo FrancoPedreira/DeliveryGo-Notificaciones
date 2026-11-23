@@ -54,7 +54,7 @@ entorno o argumento (`--notificaciones.max-intentos=5`).
 | `notificaciones.usuarios.modo` | `simulado` | Implementación del cliente de Usuarios (INT-01): `simulado` (usuarios fijos en memoria) o `http` (llama al módulo Usuarios real). |
 | `notificaciones.usuarios.base-url` | `http://localhost:8080` | URL base del módulo Usuarios. Solo se usa con `modo=http`; el valor por defecto es un placeholder. |
 | `notificaciones.usuarios.timeout-ms` | `2000` | Timeout en milisegundos (conexión y lectura) de las llamadas a Usuarios. Solo con `modo=http`. |
-| `notificaciones.usuarios.api-key` | variable `USUARIOS_API_KEY` | Clave de módulo enviada en el header `X-Api-Key`. Solo se requiere con `modo=http`; no guardar la clave real en GitHub. |
+| `notificaciones.usuarios.api-key` | variable `USUARIOS_API_KEY` (vacía) | Opcional. Si se define, se envía en `X-Api-Key`; hoy Usuarios no pide credencial entre módulos. |
 
 ## Seguridad (JWT y CORS)
 
@@ -64,11 +64,12 @@ Usuarios llama a `GET /api/v1/templates` y `POST /api/v1/notifications` solo con
 
 **Notificaciones no emite tokens ni tiene login**: los emite el módulo Usuarios cuando el usuario inicia sesión.
 Según el contrato, `sub` contiene el ID numérico del usuario (Long, representado como texto) y `role` contiene
-uno de estos valores sin prefijo: `CLIENTE`, `COMERCIO`, `REPARTIDOR`, `ADMIN` o `SISTEMA`. Notificaciones valida
+uno de estos valores sin prefijo: `CLIENTE`, `COMERCIO`, `REPARTIDOR` o `ADMIN`. Notificaciones valida
 esos datos y agrega internamente el prefijo `ROLE_` para Spring Security.
 
-`SISTEMA` es el rol de un token de servicio, sin un usuario logueado. Puede usar las APIs que aceptan cualquier
-token válido, pero no las que requieren `ADMIN`.
+**Autorización sobre el recurso:** estar autenticado no alcanza. Cada persona solo puede ver y modificar sus
+propias notificaciones: el `sub` del token tiene que ser el destinatario. `ADMIN` puede ver todas. Lo resuelve
+`ControlDeAcceso`, que usan los controllers antes de llamar al service.
 
 La firma actual es HS256. La variable `JWT_SECRET` debe tener el mismo valor que la clave usada por Usuarios;
 el valor por defecto de desarrollo sirve solo para pruebas locales.
@@ -78,20 +79,23 @@ el valor por defecto de desarrollo sirve solo para pruebas locales.
 | `/status`, `/swagger-ui.html`, `/v3/api-docs`, `/h2-console` | Público |
 | `GET /api/v1/templates` (listar), `POST /api/v1/notifications` (crear) | Público: lo llaman otros módulos sin credencial |
 | `POST` / `PUT /api/v1/templates`, `PATCH /api/v1/channels/{tipo}` | Solo rol `ADMIN` |
-| El resto de las APIs | Cualquier token válido |
+| `GET /api/v1/users/{id}/notifications` (historial) | El usuario `{id}` (su propio `sub`) o `ADMIN` |
+| `GET /api/v1/notifications/{id}`, `/attempts`, `POST /retry`, `PATCH /read` | El destinatario de la notificación o `ADMIN` |
+| El resto (`GET /api/v1/templates/{id}`, `GET /api/v1/channels`) | Cualquier token válido |
 
 Sin token, o con un token inválido o vencido, la respuesta es `401 UNAUTHORIZED`; con un token válido pero sin
-el rol necesario, `403 FORBIDDEN`. Los dos usan el formato de error común.
+el rol necesario o sobre una notificación de otra persona, `403 FORBIDDEN`. Los dos usan el formato de error
+común. Una notificación que no existe sigue dando `404`.
 
 Las clases están en el paquete `security/`: `JwtService` (valida el token), `JwtAuthFilter` (lo lee del
-header en cada solicitud) y `SecurityConfig` (reglas por ruta y CORS).
+header en cada solicitud), `SecurityConfig` (reglas por ruta y CORS) y `ControlDeAcceso` (dueño del recurso).
 
 **CORS:** el Portal Web puede llamar a esta API desde el navegador. Los orígenes permitidos se configuran con
 `notificaciones.cors.origenes-permitidos` (por defecto `http://localhost:5173`).
 
 Para probar la API, usá un JWT válido emitido por el módulo Usuarios. En Swagger, pegá el token en
 **Authorize**. El token debe incluir el ID numérico del usuario en `sub` y uno de los roles acordados en
-`role`: `CLIENTE`, `COMERCIO`, `REPARTIDOR`, `ADMIN` o `SISTEMA`. No guardes claves ni tokens reales en el repositorio.
+`role`: `CLIENTE`, `COMERCIO`, `REPARTIDOR` o `ADMIN`. No guardes claves ni tokens reales en el repositorio.
 
 ## Endpoints
 
@@ -125,8 +129,8 @@ El contrato completo (esquemas, ejemplos y códigos de error) está en Swagger y
 ### INT-01 — Notificaciones consulta a Usuarios
 
 Para crear una notificación, Notificaciones consulta el perfil del destinatario mediante
-`GET /api/v1/users/{id}`. La llamada al módulo Usuarios se autentica con `X-Api-Key`; no reenvía el JWT
-del solicitante. Si está presente, propaga el header `X-Correlation-Id`.
+`GET /api/v1/users/{id}`. Por acuerdo del ecosistema la llamada no lleva credencial (la `X-Api-Key` solo se
+envía si está configurada) y propaga el header `X-Correlation-Id`.
 
 Usuarios responde `id`, `nombre`, `apellido`, `email`, `telefono`, `rol`, `estado` y `fechaAlta`.
 Notificaciones utiliza `id`, `nombre` y `email`; convierte `estado == "ACTIVO"` en su indicador `activo`.
@@ -134,8 +138,9 @@ El contrato no incluye `pushToken`.
 
 El cliente HTTP (`UsuariosClientHttp`) se activa con `notificaciones.usuarios.modo=http`. Por defecto,
 el modo es `simulado`, con usuarios fijos para las pruebas. Para usar el módulo real hay que configurar
-`USUARIOS_BASE_URL` con la URL y el puerto donde esté levantado Usuarios, y `USUARIOS_API_KEY` con la
-clave del módulo. La clave no debe guardarse en el repositorio.
+`NOTIFICACIONES_USUARIOS_MODO=http` y `USUARIOS_BASE_URL` con la URL y el puerto donde esté levantado Usuarios.
+Al arrancar, el log indica qué modo se usa (`INT-01 REAL` o un `WARN INT-01 SIMULADA`) y `GET /status` lo informa
+en `integracionUsuarios`.
 
 | Respuesta de Usuarios | Resultado |
 |---|---|
@@ -143,8 +148,9 @@ clave del módulo. La clave no debe guardarse en el repositorio.
 | `404` | Se considera que el destinatario no existe (`422 RECIPIENT_NOT_FOUND` en nuestra API). |
 | Timeout, error de conexión, `5xx` u otra respuesta inesperada | `503 USERS_SERVICE_UNAVAILABLE`. |
 
-El cliente HTTP tiene pruebas con respuestas simuladas; todavía falta verificarlo contra una instancia real
-de Usuarios.
+El cliente HTTP tiene tests propios y además se probó contra el módulo Usuarios real el 23/11/2026, en las dos
+direcciones (Usuarios pide la bienvenida y la recuperación; Notificaciones consulta el perfil). La evidencia, el
+contrato acordado y los pasos para repetirlo están en [`doc/INTEGRACION.md`](doc/INTEGRACION.md).
 
 ### INT-02 — Los demás módulos llaman a Notificaciones
 
@@ -223,13 +229,18 @@ iniciada; para que los resultados sean deterministas conviene arrancar con
    historial del usuario 10 (API-04).
 5. **Manejo de un error:** pedir la plantilla 2 (PUSH) para el usuario 11 → `422 RECIPIENT_CONTACT_MISSING`;
    reintentar una notificación ENVIADA → `409`.
-6. **Seguridad:** repetir una llamada sin token → `401`; deshabilitar un canal con el token `CLIENTE` → `403`.
+6. **Seguridad:** repetir una llamada sin token → `401`; deshabilitar un canal con el token `CLIENTE` → `403`;
+   pedir el historial de otro usuario con un token `CLIENTE` → `403`.
 7. **Reintento (CU-05):** reiniciar con `--notificaciones.emisor.tasa-fallo=1`, crear una notificación EMAIL
    (queda `FALLIDA`) y reintentarla hasta que pase a `FALLIDA_DEFINITIVA` al tercer intento.
 8. **Caída de Usuarios:** reiniciar con `--notificaciones.usuarios.simular-caida=true` y crear una notificación
    → `503 USERS_SERVICE_UNAVAILABLE`.
 
-Los mismos pasos están como requests listas para ejecutar en `doc/notificaciones.http`.
+9. **Integración real con Usuarios:** levantar los dos módulos y ejecutar `doc/integracion-usuarios.http`
+   (registro → bienvenida → historial con el JWT de Usuarios → 403 sobre otro usuario). Ver
+   [`doc/INTEGRACION.md`](doc/INTEGRACION.md).
+
+Los pasos 1 a 8 están como requests listas para ejecutar en `doc/notificaciones.http`.
 
 ## Documentación
 
@@ -238,6 +249,8 @@ Los mismos pasos están como requests listas para ejecutar en `doc/notificacione
 | `doc/TPO_Notificaciones_Grupo6_v1.3.docx` | Análisis y diseño: casos de uso, reglas de negocio, modelo, diagramas y decisiones técnicas. |
 | `doc/openapi.yaml` | Contrato OpenAPI, generado desde la aplicación (`/v3/api-docs.yaml`). |
 | `doc/notificaciones.http` | Colección de requests para la demo. |
+| `doc/INTEGRACION.md` | Qué es real y qué es simulado, contrato con Usuarios y evidencia de la prueba integrada. |
+| `doc/integracion-usuarios.http` | Requests para la demo con Usuarios real. |
 
 
 ```bash
@@ -245,15 +258,17 @@ Los mismos pasos están como requests listas para ejecutar en `doc/notificacione
 ```
 
 Incluye tests de services y de controllers (MockMvc) para los 10 casos de uso, y además del
-`X-Correlation-Id`, del cliente HTTP de Usuarios (200, 404, 500 y timeout) y de la seguridad (401, 403 y CORS).
+`X-Correlation-Id`, del cliente HTTP de Usuarios (200, 404, 500 y timeout) y de la seguridad (401, 403 por rol y
+por dueño de la notificación, y CORS).
 Los tests de controllers envían automáticamente un token con rol `ADMIN` (`TokenDePrueba`).
 
 ## Limitaciones conocidas y pendientes
 
-- **El historial no está restringido por usuario:** cualquier token válido puede consultar el historial de
-  cualquier usuario. El contrato ya define `sub` como ID numérico; queda pendiente aplicar o acordar esa
-  restricción en este módulo.
-- **Usuarios es simulado por defecto** (ver [INT-01](#int-01--notificaciones-consulta-a-usuarios)). El cliente HTTP real existe pero está sin probar contra el módulo real.
+- **Usuarios es simulado por defecto** (ver [INT-01](#int-01--notificaciones-consulta-a-usuarios)), para poder
+  probar el módulo solo. La integración real se activa con `NOTIFICACIONES_USUARIOS_MODO=http`.
+- **Usuarios no publica `pushToken`:** con la integración real, una notificación PUSH responde
+  `422 RECIPIENT_CONTACT_MISSING`. EMAIL e IN_APP funcionan.
+- **Portal Web:** no hay repositorio del Portal para probar; solo está configurado CORS.
 - **El envío por EMAIL y PUSH es simulado**: no se manda ningún mail ni push real; solo se registra el intento
   y falla ~30 % de las veces a propósito.
 - **H2 en memoria**: los datos (incluidas las notificaciones) se pierden al reiniciar la aplicación.
