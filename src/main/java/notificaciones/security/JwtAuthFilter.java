@@ -21,8 +21,8 @@ import jakarta.servlet.http.HttpServletResponse;
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
     private static final String PREFIJO = "Bearer ";
-    // SISTEMA: token de servicio que usa Usuarios cuando no hay un usuario logueado (bienvenida y recuperación)
-    private static final Set<String> ROLES_VALIDOS = Set.of("CLIENTE", "COMERCIO", "REPARTIDOR", "ADMIN", "SISTEMA");
+    // Roles que emite Usuarios. Entre módulos no hay token (acuerdo del 17/11), por eso no hay rol de servicio
+    private static final Set<String> ROLES_VALIDOS = Set.of("CLIENTE", "COMERCIO", "REPARTIDOR", "ADMIN");
 
     private final JwtService jwtService;
 

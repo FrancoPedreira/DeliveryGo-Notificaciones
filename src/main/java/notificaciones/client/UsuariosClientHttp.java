@@ -39,6 +39,7 @@ public class UsuariosClientHttp implements UsuariosClient {
             @Value("${notificaciones.usuarios.timeout-ms:2000}") long timeoutMs,
             @Value("${notificaciones.usuarios.api-key}") String apiKey) {
         this(construirRestClient(RestClient.builder(), baseUrl, timeoutMs), apiKey);
+        log.info("INT-01 REAL: los destinatarios se consultan al módulo Usuarios en {}", baseUrl);
     }
 
     // Permite inyectar un RestClient ya armado (los tests lo enlazan a un MockRestServiceServer)

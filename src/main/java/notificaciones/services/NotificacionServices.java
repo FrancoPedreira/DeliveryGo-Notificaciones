@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -39,6 +41,10 @@ import static notificaciones.utils.Validaciones.*;
 // Orquesta los casos de uso CORE; delega en el service de cada entidad
 @Service
 public class NotificacionServices {
+    // Trazabilidad: cada paso del ciclo de vida queda en el log con el id de la notificación. El patrón de log
+    // agrega el X-Correlation-Id, así se sigue una notificación desde el módulo que la pidió hasta su lectura.
+    // No se loguea el mensaje: puede tener datos sensibles (por ejemplo, un código de recuperación)
+    private static final Logger log = LoggerFactory.getLogger(NotificacionServices.class);
     private static final int TAMANIO_MAXIMO_PAGINA = 100;
     // RN-11: campos por los que se puede ordenar el historial
     private static final Set<String> CAMPOS_ORDENABLES = Set.of("id", "fechaCreacion", "fechaUltimoIntento", "estado",
@@ -148,6 +154,8 @@ public class NotificacionServices {
             // SRV-02: si la plantilla es inválida se lanza la excepción y la transacción se revierte
             plantillaServices.generarMensaje(notificacion, notificacionDto.getPlantillaId(), parametros);
             notificacionRepository.save(notificacion);
+            log.info("Notificación {} creada: destinatario {}, plantilla {}, canal {}", notificacion.getId(),
+                    notificacion.getDestinatarioId(), notificacionDto.getPlantillaId(), canal.getTipo());
 
             // Un fallo de envío no lanza excepción: se confirma como FALLIDA con su intento
             procesarEnvio(notificacion);
@@ -184,6 +192,15 @@ public class NotificacionServices {
         notificacion.registrarIntento(resultado, maxIntentos);
         intentoEnvioServices.registrarIntento(notificacion, resultado, detalleError);
         notificacionRepository.save(notificacion);
+        log.info("Notificación {}: intento {} {} -> estado {}{}", notificacion.getId(),
+                notificacion.getCantidadIntentos(), resultado, notificacion.getEstado(),
+                detalleError != null ? " (" + detalleError + ")" : "");
+    }
+
+    // Para el control de acceso (API-02, 03, 11 y 12): de quién es la notificación. 404 si no existe
+    @Transactional(readOnly = true)
+    public Long obtenerDestinatario(Long id) {
+        return obtenerNotificacion(id).getDestinatarioId();
     }
 
     // SRV-04 (CU-04)
@@ -209,6 +226,7 @@ public class NotificacionServices {
                     + " está en estado " + notificacion.getEstado() + " y solo puede reintentarse si está FALLIDA");
         }
 
+        log.info("Notificación {}: reintento solicitado", id);
         // No hace falta guardar acá: procesarEnvio guarda al final, dentro de la misma transacción
         notificacion.volverAPendiente();
         procesarEnvio(notificacion);
@@ -310,6 +328,7 @@ public class NotificacionServices {
         }
 
         notificacion.marcarComoLeida();
+        log.info("Notificación {} leída por el destinatario {}", id, notificacion.getDestinatarioId());
         return toDto(notificacionRepository.save(notificacion));
     }
 }
