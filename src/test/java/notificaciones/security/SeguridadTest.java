@@ -169,7 +169,8 @@ class SeguridadTest {
 
     @Test
     void statusEsPublicoYDevuelve200() throws Exception {
-        mockMvc.perform(get("/status")).andExpect(status().isOk());
+        mockMvc.perform(get("/status")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.integracionUsuarios").value("simulado"));
     }
 
     // CORS: el navegador pregunta con OPTIONS (preflight, sin token) antes de la llamada real

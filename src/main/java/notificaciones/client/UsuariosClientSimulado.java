@@ -3,6 +3,7 @@ package notificaciones.client;
 import java.util.Map;
 import java.util.Optional;
 
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -26,6 +27,10 @@ public class UsuariosClientSimulado implements UsuariosClient {
 
     public UsuariosClientSimulado(@Value("${notificaciones.usuarios.simular-caida:false}") boolean simularCaida) {
         this.simularCaida = simularCaida;
+        // Se avisa al arrancar para que nunca se confunda con la integración real
+        LoggerFactory.getLogger(UsuariosClientSimulado.class).warn("INT-01 SIMULADA: no se consulta al módulo "
+                + "Usuarios; se usan los usuarios de prueba 10, 11 y 12. Para la integración real: "
+                + "notificaciones.usuarios.modo=http");
     }
 
     @Override
