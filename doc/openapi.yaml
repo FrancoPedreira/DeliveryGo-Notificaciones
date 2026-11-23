@@ -24,13 +24,12 @@ info:
 
     El envío por EMAIL y PUSH es simulado y falla aproximadamente 3 de cada 10 veces, para poder probar el reintento. IN_APP siempre se entrega.
 
-    **INT-01 — Usuarios:** Notificaciones puede validar el destinatario con un cliente simulado —modo predeterminado— o con el cliente HTTP. En modo HTTP consulta GET /api/v1/users/{id} usando el header X-Api-Key; no reenvía el JWT del solicitante. Convierte estado == ACTIVO en el indicador activo. La respuesta de Usuarios no incluye pushToken.
+    **INT-01 — Usuarios:** el destinatario se valida con un cliente simulado (modo predeterminado, usuarios 10, 11 y 12) o con el módulo Usuarios real (`notificaciones.usuarios.modo=http`), que se consulta con GET /api/v1/users/{id} sin credencial y propagando el X-Correlation-Id. Convierte estado == ACTIVO en el indicador activo; Usuarios no publica pushToken. `GET /status` informa el modo activo.
 
-    Todos los errores devuelven el mismo formato (ErrorResponseDto). Todas las respuestas devuelven el header X-Correlation-Id: el que envió el llamador o uno generado.
+    Todos los errores devuelven el mismo formato (ErrorResponseDto). Todas las respuestas devuelven el header `X-Correlation-Id`: el que envió el llamador o uno generado.
 
-    **Seguridad:** las APIs requieren Authorization: Bearer <JWT> (botón Authorize), salvo GET /api/v1/templates y POST /api/v1/notifications, que otros módulos llaman sin credencial por acuerdo del ecosistema. El token lo emite Usuarios; este módulo solo lo valida. El contrato define sub como el ID numérico del usuario y role como CLIENTE, COMERCIO, REPARTIDOR, ADMIN o SISTEMA (token de servicio de Usuarios), sin el prefijo ROLE_. Crear o modificar plantillas y habilitar o deshabilitar canales requiere el rol ADMIN.
+    **Seguridad:** las APIs requieren `Authorization: Bearer <JWT>` (botón Authorize), salvo `GET /api/v1/templates` y `POST /api/v1/notifications`, que otros módulos llaman sin credencial por acuerdo del ecosistema. El token lo emite Usuarios; este módulo solo lo valida: `sub` es el id numérico del usuario y `role` es CLIENTE, COMERCIO, REPARTIDOR o ADMIN. Crear o modificar plantillas y habilitar o deshabilitar canales requiere ADMIN. Cada usuario solo ve y modifica sus propias notificaciones (historial, estado, intentos, reintento y lectura); ADMIN puede ver todas.
   version: "1.0"
-
 servers:
 - url: http://localhost:8089
   description: Generated server url
@@ -88,7 +87,8 @@ paths:
         "401":
           description: Falta el token o es inválido (UNAUTHORIZED)
         "403":
-          description: El rol del token no puede hacer esta operación (FORBIDDEN)
+          description: El rol del token no puede hacer esta operación o la notificación
+            es de otro usuario (FORBIDDEN)
     put:
       tags:
       - Plantillas
@@ -163,7 +163,8 @@ paths:
         "401":
           description: Falta el token o es inválido (UNAUTHORIZED)
         "403":
-          description: El rol del token no puede hacer esta operación (FORBIDDEN)
+          description: El rol del token no puede hacer esta operación o la notificación
+            es de otro usuario (FORBIDDEN)
   /api/v1/templates:
     get:
       tags:
@@ -184,7 +185,8 @@ paths:
         "401":
           description: Falta el token o es inválido (UNAUTHORIZED)
         "403":
-          description: El rol del token no puede hacer esta operación (FORBIDDEN)
+          description: El rol del token no puede hacer esta operación o la notificación
+            es de otro usuario (FORBIDDEN)
     post:
       tags:
       - Plantillas
@@ -229,7 +231,8 @@ paths:
         "401":
           description: Falta el token o es inválido (UNAUTHORIZED)
         "403":
-          description: El rol del token no puede hacer esta operación (FORBIDDEN)
+          description: El rol del token no puede hacer esta operación o la notificación
+            es de otro usuario (FORBIDDEN)
   /api/v1/notifications:
     post:
       tags:
@@ -334,7 +337,8 @@ paths:
         "401":
           description: Falta el token o es inválido (UNAUTHORIZED)
         "403":
-          description: El rol del token no puede hacer esta operación (FORBIDDEN)
+          description: El rol del token no puede hacer esta operación o la notificación
+            es de otro usuario (FORBIDDEN)
   /api/v1/notifications/{id}/retry:
     post:
       tags:
@@ -403,7 +407,8 @@ paths:
         "401":
           description: Falta el token o es inválido (UNAUTHORIZED)
         "403":
-          description: El rol del token no puede hacer esta operación (FORBIDDEN)
+          description: El rol del token no puede hacer esta operación o la notificación
+            es de otro usuario (FORBIDDEN)
   /api/v1/notifications/{id}/read:
     patch:
       tags:
@@ -476,7 +481,8 @@ paths:
         "401":
           description: Falta el token o es inválido (UNAUTHORIZED)
         "403":
-          description: El rol del token no puede hacer esta operación (FORBIDDEN)
+          description: El rol del token no puede hacer esta operación o la notificación
+            es de otro usuario (FORBIDDEN)
   /api/v1/channels/{tipo}:
     patch:
       tags:
@@ -533,7 +539,22 @@ paths:
         "401":
           description: Falta el token o es inválido (UNAUTHORIZED)
         "403":
-          description: El rol del token no puede hacer esta operación (FORBIDDEN)
+          description: El rol del token no puede hacer esta operación o la notificación
+            es de otro usuario (FORBIDDEN)
+  /status:
+    get:
+      tags:
+      - status-controller
+      operationId: status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   /api/v1/users/{id}/notifications:
     get:
       tags:
@@ -622,7 +643,8 @@ paths:
         "401":
           description: Falta el token o es inválido (UNAUTHORIZED)
         "403":
-          description: El rol del token no puede hacer esta operación (FORBIDDEN)
+          description: El rol del token no puede hacer esta operación o la notificación
+            es de otro usuario (FORBIDDEN)
   /api/v1/notifications/{id}:
     get:
       tags:
@@ -670,7 +692,8 @@ paths:
         "401":
           description: Falta el token o es inválido (UNAUTHORIZED)
         "403":
-          description: El rol del token no puede hacer esta operación (FORBIDDEN)
+          description: El rol del token no puede hacer esta operación o la notificación
+            es de otro usuario (FORBIDDEN)
   /api/v1/notifications/{id}/attempts:
     get:
       tags:
@@ -716,7 +739,8 @@ paths:
         "401":
           description: Falta el token o es inválido (UNAUTHORIZED)
         "403":
-          description: El rol del token no puede hacer esta operación (FORBIDDEN)
+          description: El rol del token no puede hacer esta operación o la notificación
+            es de otro usuario (FORBIDDEN)
   /api/v1/channels:
     get:
       tags:
@@ -737,7 +761,8 @@ paths:
         "401":
           description: Falta el token o es inválido (UNAUTHORIZED)
         "403":
-          description: El rol del token no puede hacer esta operación (FORBIDDEN)
+          description: El rol del token no puede hacer esta operación o la notificación
+            es de otro usuario (FORBIDDEN)
 components:
   schemas:
     PlantillaRequestDto:
