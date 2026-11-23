@@ -186,6 +186,12 @@ public class NotificacionServices {
         notificacionRepository.save(notificacion);
     }
 
+    // Para el control de acceso (API-02, 03, 11 y 12): de quién es la notificación. 404 si no existe
+    @Transactional(readOnly = true)
+    public Long obtenerDestinatario(Long id) {
+        return obtenerNotificacion(id).getDestinatarioId();
+    }
+
     // SRV-04 (CU-04)
     @Transactional(readOnly = true)
     public NotificacionResponseDto consultarEstado(Long id) {

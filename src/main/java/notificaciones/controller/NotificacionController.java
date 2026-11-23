@@ -16,15 +16,23 @@ import org.springframework.web.bind.annotation.RestController;
 import notificaciones.dto.CrearNotificacionRequestDto;
 import notificaciones.dto.IntentoEnvioResponseDto;
 import notificaciones.dto.NotificacionResponseDto;
+import notificaciones.security.ControlDeAcceso;
 import notificaciones.services.NotificacionServices;
 
 @RestController
 @RequestMapping(value = "/api/v1/notifications", produces = MediaType.APPLICATION_JSON_VALUE)
 public class NotificacionController implements INotificacionController {
     private final NotificacionServices notificacionServices;
+    private final ControlDeAcceso controlDeAcceso;
 
-    public NotificacionController(NotificacionServices notificacionServices) {
+    public NotificacionController(NotificacionServices notificacionServices, ControlDeAcceso controlDeAcceso) {
         this.notificacionServices = notificacionServices;
+        this.controlDeAcceso = controlDeAcceso;
+    }
+
+    // Solo el destinatario (o ADMIN) puede operar sobre la notificación: 404 si no existe, 403 si es de otro
+    private void verificarAcceso(Long id) {
+        controlDeAcceso.verificarAcceso(notificacionServices.obtenerDestinatario(id));
     }
 
     // API-01
@@ -41,6 +49,7 @@ public class NotificacionController implements INotificacionController {
     @Override
     @GetMapping("/{id}")
     public ResponseEntity<NotificacionResponseDto> consultarEstado(@PathVariable Long id) {
+        verificarAcceso(id);
         return ResponseEntity.ok(notificacionServices.consultarEstado(id));
     }
 
@@ -48,6 +57,7 @@ public class NotificacionController implements INotificacionController {
     @Override
     @PostMapping("/{id}/retry")
     public ResponseEntity<NotificacionResponseDto> reintentarNotificacion(@PathVariable Long id) {
+        verificarAcceso(id);
         return ResponseEntity.ok(notificacionServices.reintentarNotificacion(id));
     }
 
@@ -55,6 +65,7 @@ public class NotificacionController implements INotificacionController {
     @Override
     @GetMapping("/{id}/attempts")
     public ResponseEntity<List<IntentoEnvioResponseDto>> consultarIntentos(@PathVariable Long id) {
+        verificarAcceso(id);
         return ResponseEntity.ok(notificacionServices.consultarIntentos(id));
     }
 
@@ -62,6 +73,7 @@ public class NotificacionController implements INotificacionController {
     @Override
     @PatchMapping("/{id}/read")
     public ResponseEntity<NotificacionResponseDto> marcarComoLeida(@PathVariable Long id) {
+        verificarAcceso(id);
         return ResponseEntity.ok(notificacionServices.marcarComoLeida(id));
     }
 }

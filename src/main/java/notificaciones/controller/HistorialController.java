@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import notificaciones.dto.NotificacionResponseDto;
 import notificaciones.dto.PaginaResponseDto;
+import notificaciones.security.ControlDeAcceso;
 import notificaciones.services.NotificacionServices;
 
 // La consigna fija esta ruta bajo /users aunque el recurso es de Notificaciones
@@ -17,9 +18,11 @@ import notificaciones.services.NotificacionServices;
 @RequestMapping(value = "/api/v1/users", produces = MediaType.APPLICATION_JSON_VALUE)
 public class HistorialController implements IHistorialController {
     private final NotificacionServices notificacionServices;
+    private final ControlDeAcceso controlDeAcceso;
 
-    public HistorialController(NotificacionServices notificacionServices) {
+    public HistorialController(NotificacionServices notificacionServices, ControlDeAcceso controlDeAcceso) {
         this.notificacionServices = notificacionServices;
+        this.controlDeAcceso = controlDeAcceso;
     }
 
     // API-04
@@ -32,6 +35,8 @@ public class HistorialController implements IHistorialController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String sort) {
+        // Cada persona ve solo su propio historial (ADMIN, el de cualquiera): 403 si el id no es el del token
+        controlDeAcceso.verificarAcceso(id);
         return ResponseEntity.ok(notificacionServices.consultarHistorial(id, estado, canal, leida, page, size, sort));
     }
 }
