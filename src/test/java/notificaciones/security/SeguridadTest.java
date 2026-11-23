@@ -120,20 +120,11 @@ class SeguridadTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    // Token de servicio de Usuarios (bienvenida y recuperación de contraseña, sin usuario logueado)
+    // Usuarios ya no emite el token de servicio SISTEMA: hoy es un rol desconocido
     @Test
-    void tokenDeServicioConRolSistemaEsAceptado() throws Exception {
+    void elRolSistemaYaNoSeAcepta() throws Exception {
         mockMvc.perform(get(CANALES).header("Authorization", bearer(tokens.crear(0L, "SISTEMA"))))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void rolSistemaNoPuedeAdministrarCanales() throws Exception {
-        mockMvc.perform(patch(CANALES + "/PUSH")
-                .header("Authorization", bearer(tokens.crear(0L, "SISTEMA")))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"activo\":true}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
